@@ -247,6 +247,14 @@ tbody tr:hover {
   z-index: 50;
 }
 
+/* [hidden] y .modal-overlay tienen la misma especificidad; sin esta regla,
+   la regla de autor (display:flex) gana sobre el display:none del user
+   agent y el overlay de pantalla completa sigue bloqueando clics de toda
+   la página aunque tenga el atributo hidden. */
+.modal-overlay[hidden] {
+  display: none;
+}
+
 .modal {
   width: 100%;
   max-width: 420px;
