@@ -31,6 +31,7 @@ export interface ProtocolThresholds {
   green_max_minutes: number;
   yellow_max_minutes: number;
   stop_without_evidence_minutes: number;
+  max_stop_minutes: number;
 }
 
 export interface TripRow {

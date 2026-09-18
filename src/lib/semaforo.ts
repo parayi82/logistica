@@ -10,6 +10,7 @@ const DEFAULT_THRESHOLDS: ProtocolThresholds = {
   green_max_minutes: 15,
   yellow_max_minutes: 30,
   stop_without_evidence_minutes: 20,
+  max_stop_minutes: 60,
 };
 
 /**

@@ -165,11 +165,32 @@ propiedad `radius` a los paraderos que hayas dibujado como punto (pin) si
 quieres que se importen como círculo en vez de con el radio por defecto
 (100 m).
 
-### ⏭️ Fase 5 — Cálculo automático de atrasos
-- Al registrar un evento `REINICIO`, comparar contra la hora esperada del
-  checkpoint (`trip_checkpoints.expected_departure_time` o el tiempo
-  estándar de detención del protocolo) y calcular `delay_minutes` en
-  `trip_delays`, disparando alerta si excede el umbral configurado.
+### ✅ Fase 5 — Cálculo automático de atrasos
+
+Trigger `app.progress_trip_checkpoint_and_delay` (`AFTER INSERT ON
+trip_events`), automático sin importar el canal de entrada:
+
+- **`DETENCION`**: marca `actual_arrival_time` en el siguiente
+  `trip_checkpoint` pendiente del viaje (status `EN_PARADA`).
+- **`REINICIO`**: cierra ese checkpoint (`actual_departure_time`, status
+  `COMPLETADO`) y calcula el atraso contra la **hora esperada previamente
+  registrada**, en dos niveles:
+  1. Si el viaje tiene `trip_checkpoints` planeados (los cargó despacho de
+     antemano): `expected_departure_time` del checkpoint donde se detuvo.
+  2. Si no hay checkpoints planeados: la última `DETENCION` del viaje +
+     `protocol_thresholds.max_stop_minutes` (tiempo máximo de detención
+     permitido por protocolo, configurable por tenant, default 60 min).
+  3. Si no hay ninguna referencia (REINICIO sin DETENCION previa), no se
+     genera atraso — no hay nada contra qué comparar.
+- Solo se inserta una fila en `trip_delays` cuando el atraso es real
+  (`delay_minutes > 0`); un reinicio a tiempo no genera registro.
+- El resultado ya se ve en el dashboard de la Fase 2 (columna "Atraso"),
+  sin cambios adicionales de UI: `dashboard.ts` ya leía `trip_delays`.
+
+Justificar un atraso (marcar `justified = true` + `reason`) ya estaba
+soportado desde la Fase 1 vía RLS (`ADMIN`/`JEFATURA` pueden actualizar
+`trip_delays`); falta solo la UI para hacerlo desde el dashboard, que se
+puede agregar cuando se necesite.
 
 ### ⏭️ Fase 6 — Reporte de turno automático (PDF + WhatsApp)
 - Job programado (Supabase Cron / Edge Function) a la hora de corte de cada
