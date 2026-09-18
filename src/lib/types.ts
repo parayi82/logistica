@@ -1,0 +1,73 @@
+export type TripStatus =
+  | "PROGRAMADO"
+  | "EN_TRANSITO"
+  | "DETENIDO"
+  | "FINALIZADO"
+  | "CANCELADO";
+
+export type TripEventType =
+  | "EN_TRANSITO"
+  | "DETENCION"
+  | "REINICIO"
+  | "EVIDENCIA"
+  | "UBICACION";
+
+export type GeofenceValidationStatus = "DENTRO" | "FUERA" | "SIN_VALIDAR";
+
+export interface Shift {
+  id: string;
+  tenant_id: string;
+  name: string;
+  starts_at: string; // "HH:MM:SS"
+  ends_at: string;
+  cutoff_time: string;
+  timezone: string;
+  days_of_week: number[]; // 1=lunes ... 7=domingo (ISO)
+  active: boolean;
+}
+
+export interface ProtocolThresholds {
+  tenant_id: string;
+  green_max_minutes: number;
+  yellow_max_minutes: number;
+  stop_without_evidence_minutes: number;
+}
+
+export interface TripRow {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  shift_id: string;
+  operator_id: string;
+  vehicle_id: string;
+  route_name: string;
+  origin: string;
+  destination: string;
+  status: TripStatus;
+  current_status_since: string;
+  scheduled_departure: string | null;
+  scheduled_arrival: string | null;
+  clients?: { name: string } | null;
+  operators?: { full_name: string; phone_e164: string } | null;
+  vehicles?: { plate: string } | null;
+}
+
+export interface TripEventRow {
+  id: string;
+  trip_id: string;
+  event_type: TripEventType;
+  reported_at: string;
+  geofence_validation_status: GeofenceValidationStatus;
+  lat: number | null;
+  lng: number | null;
+}
+
+export interface TripDelayRow {
+  id: string;
+  trip_id: string;
+  delay_minutes: number;
+  justified: boolean;
+  created_at: string;
+}
+
+export type Semaforo = "verde" | "amarillo" | "rojo";

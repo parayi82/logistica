@@ -40,6 +40,16 @@ supabase link --project-ref <project-ref>
 supabase db push
 ```
 
+Después de aplicar las migraciones necesitas, al menos para empezar a
+probar:
+
+1. Crear un `tenant` (dispara automáticamente su fila en
+   `protocol_thresholds`).
+2. Invitar usuarios desde el dashboard de Supabase (Authentication) y luego
+   insertar su fila en `public.profiles` con `tenant_id` + `role`.
+3. Dar de alta `clients`, `operators`, `vehicles` y al menos un `shift` que
+   cubra la hora actual para que el dashboard muestre el turno vigente.
+
 ## Roadmap
 
 ### ✅ Fase 1 — Modelo de datos multi-tenant (en curso)
@@ -48,10 +58,19 @@ clientes, operadores, unidades, turnos, viajes, geocercas, eventos, atrasos,
 evidencia y reportes. Ver propuesta de esquema discutida con el equipo antes
 de aplicar migraciones.
 
-### ✅ Fase 2 — Dashboard web en tiempo real (en curso)
+### ✅ Fase 2 — Dashboard web en tiempo real
 Página `dashboard.html` que lista los viajes activos del turno vigente vía
 Supabase Realtime, con semáforo de cumplimiento (verde/amarillo/rojo) según
 tiempo transcurrido desde el último evento y validación de geocerca.
+
+- `src/lib/currentShift.ts` determina qué turno está vigente ahora (soporta
+  turnos que cruzan medianoche).
+- `src/lib/semaforo.ts` calcula el semáforo por viaje usando
+  `protocol_thresholds` (verde/amarillo por minutos sin reportar, rojo si el
+  último evento marcó la coordenada fuera de la geocerca autorizada).
+- Suscripción Realtime a `trips`, `trip_events` y `trip_delays` (respeta RLS:
+  cada usuario solo recibe los cambios que su rol puede ver).
+- Filtros por estatus y por color de semáforo, chips de resumen del turno.
 
 ### ⏭️ Fase 3 — Integración WhatsApp Business Platform (Meta Cloud API)
 Edge Function `whatsapp-webhook` que:
