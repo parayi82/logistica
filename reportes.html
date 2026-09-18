@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torre de Control — Reportes</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <h1>Torre de Control — Reportes</h1>
+      <div class="meta">
+        <a href="/dashboard.html" style="color: inherit">Viajes activos</a>
+        · <a href="/geofences.html" style="color: inherit">Geocercas</a>
+        · <span id="user-email"></span>
+        · <a href="#" id="logout-link" style="color: inherit">Salir</a>
+      </div>
+    </div>
+
+    <main>
+      <div class="card" style="margin-bottom: 16px">
+        <label for="from-date">Desde</label>
+        <input id="from-date" type="date" />
+
+        <label for="to-date" style="margin-top: 10px">Hasta</label>
+        <input id="to-date" type="date" />
+
+        <label for="group-by" style="margin-top: 10px">Agrupar por</label>
+        <select id="group-by">
+          <option value="operator">Operador</option>
+          <option value="client">Cliente</option>
+          <option value="route">Ruta</option>
+        </select>
+
+        <button id="run-report-btn" type="button" style="margin-top: 14px">Generar reporte</button>
+      </div>
+
+      <div class="summary-row" id="summary-row"></div>
+
+      <p id="report-empty-state" class="empty-state" hidden></p>
+
+      <table>
+        <thead>
+          <tr>
+            <th id="group-col-header">Operador</th>
+            <th>Viajes con atraso</th>
+            <th>Atraso promedio</th>
+            <th>Justificados</th>
+            <th>No justificados</th>
+            <th>Fuera de geocerca</th>
+            <th>Escalamientos a Seguridad</th>
+          </tr>
+        </thead>
+        <tbody id="report-tbody">
+          <tr>
+            <td colspan="7" class="empty-state">Elige un rango de fechas y dale a "Generar reporte".</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+
+    <script type="module" src="/src/reportes.ts"></script>
+  </body>
+</html>

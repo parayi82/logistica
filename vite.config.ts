@@ -15,6 +15,7 @@ export default defineConfig({
         login: resolve(__dirname, "login.html"),
         dashboard: resolve(__dirname, "dashboard.html"),
         geofences: resolve(__dirname, "geofences.html"),
+        reportes: resolve(__dirname, "reportes.html"),
       },
     },
   },

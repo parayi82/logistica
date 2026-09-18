@@ -341,6 +341,35 @@ actualizado para llamar ambas funciones).
 deploy send-trip-alert` de la Fase 8 (ya desplegado ahí si seguiste el
 orden; si no, correrlo ahora aplica el cambio).
 
+> **Bug real encontrado y corregido**: la migración de esta fase usó
+> `create or replace function` para agregarle un 5º parámetro a
+> `app.notify_trip_alert`, pero Postgres no reemplaza una función si
+> cambia la firma (cantidad de parámetros) — crea un *segundo* overload
+> en vez de sustituir el original. Eso dejó 2 versiones coexistiendo, y
+> cualquier llamada con 4 argumentos (como la de la Fase 8) se volvió
+> ambigua ("function ... is not unique"), rompiendo el barrido completo
+> de alertas de ambas fases en producción. Corregido en la migración
+> `20260919000300_fix_notify_trip_alert_overload.sql` (`drop function`
+> de la firma vieja). Lección para futuras fases: cambiar la firma de una
+> función siempre necesita un `drop function` explícito de la versión
+> anterior, `create or replace` no basta.
+
+### ✅ Fase 10 — KPIs históricos
+
+Página nueva `reportes.html`: cumplimiento y atrasos por operador, cliente
+o ruta a lo largo del tiempo (no solo el turno vigente, a diferencia del
+dashboard de la Fase 2). Dos vistas de solo lectura con
+`security_invoker=true` (mismo patrón que `geofences_geojson` de la Fase
+4, respetan la RLS de quien consulta) — `trip_delays_report` y
+`trip_alerts_report` — con operador/cliente/ruta ya resueltos por join; el
+navegador filtra por rango de fechas y agrega/agrupa en JS (flexible sin
+tener que anticipar cada reporte posible en SQL). Muestra: viajes con
+atraso, atraso promedio, atrasos justificados/no justificados, eventos
+fuera de geocerca, y escalamientos a Seguridad Patrimonial.
+
+**Configuración**: ninguna — son solo 2 vistas SQL, sin Edge Function ni
+secrets nuevos.
+
 ## Estructura del repositorio
 
 ```
@@ -356,5 +385,6 @@ src/
   login.ts                     # página de ingreso
   dashboard.ts                  # torre de control en tiempo real + mapa en vivo (Fase 7)
   geofences.ts                  # Fase 4: importador + mapa de geocercas
-index.html / login.html / dashboard.html / geofences.html
+  reportes.ts                   # Fase 10: KPIs históricos por operador/cliente/ruta
+index.html / login.html / dashboard.html / geofences.html / reportes.html
 ```

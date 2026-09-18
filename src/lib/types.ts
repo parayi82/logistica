@@ -106,3 +106,43 @@ export interface ImportGeofenceResult {
   status: "ok" | "omitido" | "error";
   detail: string | null;
 }
+
+export type AlertType = "FUERA_DE_GEOCERCA" | "ATRASO" | "SIN_REPORTE" | "ESCALAMIENTO_SEGURIDAD";
+
+export interface TripDelayReportRow {
+  id: string;
+  trip_id: string;
+  delay_minutes: number;
+  justified: boolean;
+  created_at: string;
+  route_name: string;
+  client_id: string | null;
+  operator_id: string | null;
+  client_name: string | null;
+  operator_name: string | null;
+}
+
+export interface TripAlertReportRow {
+  id: string;
+  trip_id: string;
+  alert_type: AlertType;
+  created_at: string;
+  route_name: string;
+  client_id: string | null;
+  operator_id: string | null;
+  client_name: string | null;
+  operator_name: string | null;
+}
+
+export type ReportGroupBy = "operator" | "client" | "route";
+
+export interface KpiGroupStats {
+  key: string;
+  label: string;
+  tripsWithDelay: number;
+  avgDelayMinutes: number;
+  delaysJustified: number;
+  delaysUnjustified: number;
+  fueraDeGeocerca: number;
+  escalamientosSeguridad: number;
+}
