@@ -52,6 +52,12 @@ probar:
 
 ## Roadmap
 
+Las 6 fases originales están implementadas. Lo que queda es trabajo de
+"último kilómetro" específico de cada instalación (crear la app de Meta,
+generar los secrets de Vault, cargar el catálogo real de clientes/turnos/
+checklist) — no código pendiente. Ver la nota al final de cada fase para
+el detalle de qué configurar.
+
 ### ✅ Fase 1 — Modelo de datos multi-tenant
 Esquema en Postgres con RLS por tenant y por rol: tenants, perfiles/roles,
 clientes, operadores, unidades, turnos, viajes, geocercas, eventos, atrasos,
@@ -192,16 +198,59 @@ soportado desde la Fase 1 vía RLS (`ADMIN`/`JEFATURA` pueden actualizar
 `trip_delays`); falta solo la UI para hacerlo desde el dashboard, que se
 puede agregar cuando se necesite.
 
-### ⏭️ Fase 6 — Reporte de turno automático (PDF + WhatsApp)
-- Job programado (Supabase Cron / Edge Function) a la hora de corte de cada
-  turno (`shifts.cutoff_time`).
-- Genera PDF replicando el formato actual: encabezado de turno, tabla de
-  reinicios sin evidencia, tabla de detenciones, tabla de validación de
-  coordenadas, lista de incumplimientos, checklist de cumplimiento y
-  observaciones.
-- Sube el PDF a Supabase Storage y lo envía automáticamente por WhatsApp
-  (Media + Document message) a los contactos de Jefatura y Seguridad
-  Patrimonial configurados por tenant.
+### ✅ Fase 6 — Reporte de turno automático (PDF + WhatsApp)
+
+**Cómo se dispara**: no hay una sola "hora de corte" global — cada turno
+tiene la suya, en su propio timezone. En vez de un cron por turno,
+`pg_cron` corre un barrido cada 5 minutos (`generate-shift-report-sweep`)
+que llama a la Edge Function `generate-shift-report` sin argumentos; ella
+consulta `shifts_due_for_report` (Fase 6, migración
+`20260918001700`) para saber qué turnos ya cruzaron su `cutoff_time` (en
+su timezone y respetando `days_of_week`) y todavía no tienen un reporte
+`GENERADO`/`ENVIADO` para esa fecha — así que reintentarlo no duplica nada
+si el cron se retrasa o se cae un tick.
+
+**Contenido del PDF** (`supabase/functions/generate-shift-report/pdf.ts`,
+generado con `pdf-lib`): encabezado de turno, tabla de reinicios sin
+evidencia, tabla de detenciones, tabla de validación de coordenadas, lista
+de incumplimientos, checklist de cumplimiento y observaciones (resumen
+autogenerado). El rango de datos del turno se calcula por duración (no por
+fecha de calendario), así que un turno que cruza medianoche no genera
+ambigüedad sobre "a qué día pertenece" (`window.ts`).
+
+**Envío**: sube el PDF a Storage (`shift-reports/{tenant_id}/{shift_id}/{fecha}.pdf`)
+y lo envía como WhatsApp *document message* a cada `profiles` con rol
+`JEFATURA` o `SEGURIDAD_PATRIMONIAL` (activo, con `phone` configurado) del
+mismo tenant — no hace falta una tabla de contactos aparte, son "los
+Jefatura y Seguridad Patrimonial configurados" literalmente vía roles.
+
+**Regeneración manual**: la misma función acepta `POST { "shift_id": "..." }`
+desde el dashboard (con el JWT del usuario). Internamente valida que quien
+llama sea `ADMIN` del tenant dueño de ese turno antes de procesar nada —
+sin ese chequeo, cualquier sesión válida podría forzar el reporte
+confidencial de otro tenant, porque el resto de la función usa el cliente
+`service_role` que ignora RLS.
+
+**Configuración** (además de los secrets de WhatsApp de la Fase 3):
+
+```bash
+supabase functions deploy generate-shift-report
+
+supabase secrets set \
+  SUPABASE_URL=https://<project-ref>.supabase.co \
+  SUPABASE_SERVICE_ROLE_KEY=... # ya la inyecta el runtime, no hace falta duplicarla
+```
+
+Y, **una sola vez**, desde el SQL Editor del proyecto (nunca en una
+migración — son secretos reales, no deben vivir en git):
+
+```sql
+select vault.create_secret('https://<project-ref>.supabase.co', 'project_url');
+select vault.create_secret('<tu service_role key>', 'service_role_key');
+```
+
+Si `create extension pg_cron;`/`pg_net;` fallan en la migración por
+permisos, actívalas primero desde el Dashboard → Database → Extensions.
 
 ## Estructura del repositorio
 
@@ -211,6 +260,7 @@ supabase/
   functions/
     _shared/                   # cliente admin, firma HMAC, cliente Graph API
     whatsapp-webhook/           # Fase 3: webhook + máquina de estados
+    generate-shift-report/      # Fase 6: PDF + envío por WhatsApp
 src/
   lib/                         # supabaseClient, tipos, auth/sesión, turno/semáforo
   login.ts                     # página de ingreso

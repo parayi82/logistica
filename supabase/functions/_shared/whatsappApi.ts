@@ -110,3 +110,37 @@ export async function downloadWhatsAppMedia(
     mimeType: meta.mime_type,
   };
 }
+
+/**
+ * Sube un archivo (ej. el PDF del reporte de turno) al servidor de medios
+ * de WhatsApp y devuelve el media_id para usarlo en un mensaje "document".
+ */
+export async function uploadWhatsAppMedia(
+  bytes: Uint8Array,
+  mimeType: string,
+  filename: string
+): Promise<string> {
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("file", new Blob([bytes], { type: mimeType }), filename);
+  form.append("type", mimeType);
+
+  const response = await fetch(graphUrl(`${phoneNumberId()}/media`), {
+    method: "POST",
+    headers: { Authorization: `Bearer ${accessToken()}` },
+    body: form,
+  });
+  if (!response.ok) {
+    throw new Error(`No se pudo subir el medio a WhatsApp: ${response.status} ${await response.text()}`);
+  }
+  const data = (await response.json()) as { id: string };
+  return data.id;
+}
+
+export function sendDocument(to: string, mediaId: string, filename: string, caption?: string): Promise<void> {
+  return callMessagesApi({
+    to,
+    type: "document",
+    document: { id: mediaId, filename, caption },
+  });
+}
