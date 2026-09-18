@@ -71,3 +71,36 @@ export interface TripDelayRow {
 }
 
 export type Semaforo = "verde" | "amarillo" | "rojo";
+
+export interface ClientRow {
+  id: string;
+  name: string;
+  code: string | null;
+}
+
+export interface GeoJsonPolygon {
+  type: "Polygon";
+  coordinates: number[][][];
+}
+
+export interface GeoJsonMultiPolygon {
+  type: "MultiPolygon";
+  coordinates: number[][][][];
+}
+
+export interface GeofenceGeoJsonRow {
+  id: string;
+  client_id: string;
+  name: string;
+  category: string;
+  active: boolean;
+  source: string;
+  imported_at: string;
+  geometry: GeoJsonPolygon | GeoJsonMultiPolygon;
+}
+
+export interface ImportGeofenceResult {
+  feature_name: string;
+  status: "ok" | "omitido" | "error";
+  detail: string | null;
+}

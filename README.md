@@ -124,12 +124,46 @@ operador (poco probable en la práctica), la función toma el primer match y
 lo registra en el log — no hay hoy una forma de que el operador elija
 tenant desde WhatsApp.
 
-### ⏭️ Fase 4 — Motor de geocercas
-- Importador de mapas de Google My Maps exportados como KML/GeoJSON hacia
-  `geofences` (columna `geom geography(Polygon,4326)` con PostGIS).
-- Función/trigger que, al recibir un evento con coordenadas, valida contra
-  `ST_Contains`/`ST_DWithin` las geocercas del cliente correspondiente al
-  viaje y guarda el resultado (`DENTRO`/`FUERA`/`SIN_VALIDAR`) en el evento.
+### ✅ Fase 4 — Motor de geocercas
+
+**Validación automática** (`app.validate_trip_event_geofence`, trigger
+`BEFORE INSERT OR UPDATE OF lat, lng ON trip_events`): cualquier coordenada
+que llegue en un `trip_event` — por cualquier canal, no solo WhatsApp — se
+compara contra las geocercas activas del cliente del viaje
+(`ST_Contains` sobre `geom::geometry`) y se guarda `DENTRO`/`FUERA` +
+`geofence_match_id`. Sin lat/lng, el evento queda `SIN_VALIDAR`. Al vivir en
+un trigger (no en el webhook), cubre también los eventos que inserte el
+dashboard directamente.
+
+**Importador GeoJSON** (`app.import_geofences`, wrapper público
+`public.import_geofences` para PostgREST): recibe un `FeatureCollection` y
+hace upsert por `(tenant_id, client_id, name)` — reimportar el mismo mapa
+actualiza en vez de duplicar. Soporta:
+- `Polygon`/`MultiPolygon` (el caso típico: un polígono dibujado a mano
+  en Google My Maps).
+- `Point` + propiedad `radius`/`radius_meters` en metros (un parador
+  marcado como pin): se convierte a círculo con `ST_Buffer` sobre
+  `geography`.
+- Cualquier otro tipo de geometría se reporta como `omitido` en vez de
+  fallar todo el import.
+
+Autorización: la función valida internamente que quien la llama sea
+`ADMIN` del mismo tenant que el cliente destino (por eso sí se puede
+otorgar a `authenticated`, a diferencia de `record_trip_event`).
+
+**Página `geofences.html`**: selector de cliente, carga de archivo
+`.geojson` (ADMIN), tabla de resultados por feature (`ok`/`omitido`/`error`)
+y mapa Leaflet (vía la vista `geofences_geojson`, con
+`security_invoker = true` para que respete las mismas policies de RLS que
+`geofences`) para verificar visualmente lo importado.
+
+**Cómo obtener el GeoJSON desde Google My Maps**: My Maps exporta a
+KML/KMZ, no directamente a GeoJSON — conviértelo con una herramienta como
+[mygeodata.cloud](https://mygeodata.cloud/converter/kml-to-geojson) o
+`ogr2ogr -f GeoJSON salida.geojson entrada.kml`, y agrega manualmente la
+propiedad `radius` a los paraderos que hayas dibujado como punto (pin) si
+quieres que se importen como círculo en vez de con el radio por defecto
+(100 m).
 
 ### ⏭️ Fase 5 — Cálculo automático de atrasos
 - Al registrar un evento `REINICIO`, comparar contra la hora esperada del
@@ -157,8 +191,9 @@ supabase/
     _shared/                   # cliente admin, firma HMAC, cliente Graph API
     whatsapp-webhook/           # Fase 3: webhook + máquina de estados
 src/
-  lib/                         # supabaseClient, tipos, helpers de rol/turno/semáforo
+  lib/                         # supabaseClient, tipos, auth/sesión, turno/semáforo
   login.ts                     # página de ingreso
   dashboard.ts                  # torre de control en tiempo real
-index.html / login.html / dashboard.html
+  geofences.ts                  # Fase 4: importador + mapa de geocercas
+index.html / login.html / dashboard.html / geofences.html
 ```

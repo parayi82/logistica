@@ -1,4 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
+import { requireSession } from "@/lib/auth";
 import { findCurrentShift } from "@/lib/currentShift";
 import { computeSemaforo, minutesSince } from "@/lib/semaforo";
 import type {
@@ -25,15 +26,6 @@ let thresholds: ProtocolThresholds | undefined;
 let trips: TripRow[] = [];
 const lastEventByTrip = new Map<string, TripEventRow>();
 const lastDelayByTrip = new Map<string, TripDelayRow>();
-
-async function requireSession() {
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) {
-    window.location.href = "/login.html";
-    throw new Error("no session");
-  }
-  return data.session;
-}
 
 async function loadShiftsAndThresholds() {
   const [{ data: shifts, error: shiftsError }, { data: thresholdsRow }] = await Promise.all([
