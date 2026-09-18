@@ -323,6 +323,24 @@ secrets de Vault (`project_url`, `service_role_key`) ya creados en la Fase
 supabase functions deploy send-trip-alert
 ```
 
+### ✅ Fase 9 — Escalamiento automático a Seguridad Patrimonial
+
+Extiende la Fase 8 con una señal distinta y más seria: la alerta
+`SIN_REPORTE` de la Fase 8 detecta silencio (nadie reportó nada); esta
+detecta específicamente un viaje `DETENIDO` que superó
+`protocol_thresholds.security_escalation_minutes` (default 45 min) **sin
+ninguna evidencia fotográfica subida durante esa detención** — se dirige
+solo a `SEGURIDAD_PATRIMONIAL`, no a Jefatura, vía el nuevo parámetro
+`target_roles` de `app.notify_trip_alert`/`send-trip-alert` (por defecto
+sigue siendo ambos roles, para no romper los disparadores de la Fase 8).
+`app.check_stopped_without_evidence()` corre en el mismo barrido de
+`pg_cron` de 5 minutos que la Fase 8 (mismo `cron.job`, comando
+actualizado para llamar ambas funciones).
+
+**Configuración**: ninguna nueva. Solo hace falta el `supabase functions
+deploy send-trip-alert` de la Fase 8 (ya desplegado ahí si seguiste el
+orden; si no, correrlo ahora aplica el cambio).
+
 ## Estructura del repositorio
 
 ```

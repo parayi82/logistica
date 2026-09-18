@@ -1,10 +1,13 @@
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
 import { sendText } from "../_shared/telegramApi.ts";
 
+const DEFAULT_TARGET_ROLES = ["JEFATURA", "SEGURIDAD_PATRIMONIAL"];
+
 interface AlertPayload {
   trip_id?: string;
   alert_type?: string;
   message?: string;
+  target_roles?: string[];
 }
 
 Deno.serve(async (req: Request) => {
@@ -54,12 +57,15 @@ Deno.serve(async (req: Request) => {
     });
   }
 
+  const targetRoles =
+    body.target_roles && body.target_roles.length > 0 ? body.target_roles : DEFAULT_TARGET_ROLES;
+
   const { data: recipients, error: recipientsError } = await db
     .from("profiles")
     .select("telegram_chat_id")
     .eq("tenant_id", trip.tenant_id)
     .eq("active", true)
-    .in("role", ["JEFATURA", "SEGURIDAD_PATRIMONIAL"])
+    .in("role", targetRoles)
     .not("telegram_chat_id", "is", null);
   if (recipientsError) throw recipientsError;
 
