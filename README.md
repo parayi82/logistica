@@ -52,11 +52,10 @@ probar:
 
 ## Roadmap
 
-### ✅ Fase 1 — Modelo de datos multi-tenant (en curso)
+### ✅ Fase 1 — Modelo de datos multi-tenant
 Esquema en Postgres con RLS por tenant y por rol: tenants, perfiles/roles,
 clientes, operadores, unidades, turnos, viajes, geocercas, eventos, atrasos,
-evidencia y reportes. Ver propuesta de esquema discutida con el equipo antes
-de aplicar migraciones.
+evidencia y reportes.
 
 ### ✅ Fase 2 — Dashboard web en tiempo real
 Página `dashboard.html` que lista los viajes activos del turno vigente vía
@@ -72,18 +71,58 @@ tiempo transcurrido desde el último evento y validación de geocerca.
   cada usuario solo recibe los cambios que su rol puede ver).
 - Filtros por estatus y por color de semáforo, chips de resumen del turno.
 
-### ⏭️ Fase 3 — Integración WhatsApp Business Platform (Meta Cloud API)
-Edge Function `whatsapp-webhook` que:
-- Verifica el webhook de Meta (`hub.challenge`) y valida la firma de cada
-  request entrante.
-- Identifica al operador por su número de teléfono (`operators.phone_e164`).
-- Ofrece un flujo guiado por botones/listas interactivas (WhatsApp
-  Interactive Messages) para reportar: En tránsito / Detención / Reinicio /
-  Enviar evidencia (foto) / Compartir ubicación.
-- Persiste el estado de la conversación (`whatsapp_conversation_state`) para
-  sostener el flujo de varios pasos.
-- Descarga medios (fotos, ubicación) vía Media API de Meta y los sube a
-  Supabase Storage.
+### ✅ Fase 3 — Integración WhatsApp Business Platform (Meta Cloud API)
+Edge Function `whatsapp-webhook` (`supabase/functions/whatsapp-webhook/`):
+
+- **Verificación** (`GET`): responde `hub.challenge` si `hub.verify_token`
+  coincide con `WHATSAPP_VERIFY_TOKEN`.
+- **Seguridad** (`POST`): valida `X-Hub-Signature-256` (HMAC-SHA256 con
+  `WHATSAPP_APP_SECRET`) antes de procesar cualquier payload; responde
+  `200` de inmediato (`EdgeRuntime.waitUntil`) y procesa en segundo plano,
+  como espera Meta.
+- **Identificación**: normaliza el número entrante (`5215500000001` →
+  `+52...`, contemplando el prefijo `1` extra de México) y lo busca en
+  `operators.phone_e164`. Si no hay match, responde que el número no está
+  registrado.
+- **Deduplicación**: cada `wamid` se registra en
+  `whatsapp_inbound_messages` (unique) para ignorar los reintentos de Meta.
+- **Flujo guiado** (lista interactiva, 5 opciones): En tránsito / Detención
+  / Reinicio / Enviar evidencia (foto) / Compartir ubicación. El estado de
+  la conversación (`whatsapp_conversation_state.current_step`) sostiene los
+  pasos de "esperando foto" / "esperando ubicación".
+- **Escritura atómica**: todas las escrituras de eventos pasan por la
+  función `public.record_trip_event(...)` (wrapper de `app.record_trip_event`,
+  el único schema expuesto a PostgREST), que inserta el `trip_event` y
+  actualiza `trips.status`/`current_status_since` en una sola transacción.
+  Ese es también el punto donde se conectará la validación de geocerca
+  (Fase 4) y el cálculo de atrasos (Fase 5).
+- **Evidencia**: descarga la foto vía Media API de Meta (resuelve URL
+  temporal + descarga autenticada) y la sube a Supabase Storage
+  (`trip-evidence/{tenant_id}/{trip_id}/...`).
+- **Ubicación**: usa el mensaje interactivo nativo `location_request_message`
+  de WhatsApp para pedir la ubicación en vivo.
+
+**Configuración** (una vez desplegada la función):
+
+```bash
+supabase functions deploy whatsapp-webhook
+
+supabase secrets set \
+  WHATSAPP_VERIFY_TOKEN=... \
+  WHATSAPP_ACCESS_TOKEN=... \
+  WHATSAPP_PHONE_NUMBER_ID=... \
+  WHATSAPP_APP_SECRET=...
+```
+
+En el panel de Meta for Developers → tu app → WhatsApp → Configuration,
+registra como *Callback URL* la URL de la función
+(`https://<project-ref>.functions.supabase.co/whatsapp-webhook`) y el mismo
+`WHATSAPP_VERIFY_TOKEN`, y suscribe el campo `messages`.
+
+**Pendiente conocido**: si dos tenants dieran de alta el mismo número de
+operador (poco probable en la práctica), la función toma el primer match y
+lo registra en el log — no hay hoy una forma de que el operador elija
+tenant desde WhatsApp.
 
 ### ⏭️ Fase 4 — Motor de geocercas
 - Importador de mapas de Google My Maps exportados como KML/GeoJSON hacia
@@ -113,11 +152,13 @@ Edge Function `whatsapp-webhook` que:
 
 ```
 supabase/
-  migrations/        # esquema SQL versionado + RLS
-  functions/          # Edge Functions (whatsapp-webhook, generate-report, ...)
+  migrations/                 # esquema SQL versionado + RLS
+  functions/
+    _shared/                   # cliente admin, firma HMAC, cliente Graph API
+    whatsapp-webhook/           # Fase 3: webhook + máquina de estados
 src/
-  lib/                # supabaseClient, tipos, helpers de rol
-  login.ts            # página de ingreso
-  dashboard.ts         # torre de control en tiempo real
+  lib/                         # supabaseClient, tipos, helpers de rol/turno/semáforo
+  login.ts                     # página de ingreso
+  dashboard.ts                  # torre de control en tiempo real
 index.html / login.html / dashboard.html
 ```
