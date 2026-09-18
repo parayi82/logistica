@@ -3,7 +3,7 @@
 Plataforma multi-tenant para monitorear en tiempo real el cumplimiento de
 protocolo de viajes de carga: estatus de tránsito/detención, validación de
 coordenadas contra geocercas autorizadas, cálculo de atrasos y reportes de
-turno automáticos por WhatsApp.
+turno automáticos por Telegram.
 
 ## Stack
 
@@ -77,64 +77,89 @@ tiempo transcurrido desde el último evento y validación de geocerca.
   cada usuario solo recibe los cambios que su rol puede ver).
 - Filtros por estatus y por color de semáforo, chips de resumen del turno.
 
-### ✅ Fase 3 — Integración WhatsApp Business Platform (Meta Cloud API)
-Edge Function `whatsapp-webhook` (`supabase/functions/whatsapp-webhook/`):
+### ✅ Fase 3 — Integración Telegram Bot API
 
-- **Verificación** (`GET`): responde `hub.challenge` si `hub.verify_token`
-  coincide con `WHATSAPP_VERIFY_TOKEN`.
-- **Seguridad** (`POST`): valida `X-Hub-Signature-256` (HMAC-SHA256 con
-  `WHATSAPP_APP_SECRET`) antes de procesar cualquier payload; responde
-  `200` de inmediato (`EdgeRuntime.waitUntil`) y procesa en segundo plano,
-  como espera Meta.
-- **Identificación**: normaliza el número entrante (`5215500000001` →
-  `+52...`, contemplando el prefijo `1` extra de México) y lo busca en
-  `operators.phone_e164`. Si no hay match, responde que el número no está
-  registrado.
-- **Deduplicación**: cada `wamid` se registra en
-  `whatsapp_inbound_messages` (unique) para ignorar los reintentos de Meta.
-- **Flujo guiado** (lista interactiva, 5 opciones): En tránsito / Detención
-  / Reinicio / Enviar evidencia (foto) / Compartir ubicación. El estado de
-  la conversación (`whatsapp_conversation_state.current_step`) sostiene los
+> **Nota de decisión**: originalmente esta fase se diseñó sobre WhatsApp
+> Business Platform (Meta Cloud API). Se reemplazó por Telegram Bot API a
+> petición explícita del usuario, principalmente porque el alta en Meta
+> Business (verificación de negocio) resultó una fricción difícil de
+> resolver rápido. Telegram no requiere ningún tipo de verificación de
+> negocio — un bot se crea en minutos hablando con `@BotFather` dentro de
+> la propia app. El tradeoff real no es técnico sino de adopción: los
+> operadores necesitan tener Telegram instalado (mucho menos universal que
+> WhatsApp entre choferes en México/LatAm). Toda la lógica de negocio
+> (identificación por teléfono, `record_trip_event`, geocercas, atrasos)
+> es idéntica a la que tenía el diseño con WhatsApp — solo cambia el canal.
+
+Edge Function `telegram-webhook` (`supabase/functions/telegram-webhook/`):
+
+- **Seguridad**: valida el header `X-Telegram-Bot-Api-Secret-Token` contra
+  `TELEGRAM_WEBHOOK_SECRET` (una cadena que tú inventas al registrar el
+  webhook) — el equivalente de Telegram al `X-Hub-Signature-256` de Meta,
+  pero sin HMAC: es una comparación directa de secreto compartido. Responde
+  `200` de inmediato y procesa en segundo plano (`EdgeRuntime.waitUntil`).
+- **Identificación**: a diferencia de WhatsApp, el primer mensaje de
+  Telegram *no* trae el número de teléfono — solo un `telegram_user_id`
+  numérico. El bot le pide al operador compartir su teléfono con el botón
+  nativo "📱 Compartir mi teléfono" (Telegram confirma criptográficamente
+  que es el número real de esa cuenta), y ahí se empareja contra
+  `operators.phone_e164` igual que antes. Hasta que se identifica,
+  `telegram_contacts.tenant_id` queda `NULL` (no sabemos a qué tenant
+  pertenece todavía).
+- **Deduplicación**: cada `update_id` (Telegram lo garantiza único y
+  creciente por bot) se registra en `telegram_inbound_messages`.
+- **Flujo guiado** (botones inline, 5 opciones): En tránsito / Detención /
+  Reinicio / Enviar evidencia (foto) / Compartir ubicación. El estado de la
+  conversación (`telegram_conversation_state.current_step`) sostiene los
   pasos de "esperando foto" / "esperando ubicación".
-- **Escritura atómica**: todas las escrituras de eventos pasan por la
-  función `public.record_trip_event(...)` (wrapper de `app.record_trip_event`,
-  el único schema expuesto a PostgREST), que inserta el `trip_event` y
-  actualiza `trips.status`/`current_status_since` en una sola transacción.
-  Ese es también el punto donde se conectará la validación de geocerca
-  (Fase 4) y el cálculo de atrasos (Fase 5).
-- **Evidencia**: descarga la foto vía Media API de Meta (resuelve URL
-  temporal + descarga autenticada) y la sube a Supabase Storage
-  (`trip-evidence/{tenant_id}/{trip_id}/...`).
-- **Ubicación**: usa el mensaje interactivo nativo `location_request_message`
-  de WhatsApp para pedir la ubicación en vivo.
+- **Escritura atómica**: igual que antes, todo pasa por
+  `public.record_trip_event(...)`, que valida la geocerca (Fase 4) y
+  calcula atrasos (Fase 5) automáticamente sin importar el canal.
+- **Evidencia**: descarga la foto vía `getFile` + descarga directa (más
+  simple que el Media API de Meta, sin token de medios separado) y la sube
+  a Supabase Storage (`trip-evidence/{tenant_id}/{trip_id}/...`).
+- **Ubicación**: usa el botón nativo de Telegram "solicitar ubicación".
+- **`/start`**: cualquier persona (no solo operadores) que le escriba
+  `/start` al bot recibe su propio `telegram_chat_id` — es lo que un
+  `JEFATURA`/`SEGURIDAD_PATRIMONIAL` necesita pegar en su perfil
+  (`profiles.telegram_chat_id`) para recibir el reporte de turno (Fase 6).
 
 **Configuración** (una vez desplegada la función):
 
 ```bash
-supabase functions deploy whatsapp-webhook
+supabase functions deploy telegram-webhook
 
 supabase secrets set \
-  WHATSAPP_VERIFY_TOKEN=... \
-  WHATSAPP_ACCESS_TOKEN=... \
-  WHATSAPP_PHONE_NUMBER_ID=... \
-  WHATSAPP_APP_SECRET=...
+  TELEGRAM_BOT_TOKEN=... \
+  TELEGRAM_WEBHOOK_SECRET=...
 ```
 
-En el panel de Meta for Developers → tu app → WhatsApp → Configuration,
-registra como *Callback URL* la URL de la función
-(`https://<project-ref>.functions.supabase.co/whatsapp-webhook`) y el mismo
-`WHATSAPP_VERIFY_TOKEN`, y suscribe el campo `messages`.
+Para crear el bot y obtener el token: en Telegram, busca **@BotFather**,
+envíale `/newbot`, ponle nombre y username, y te da el token
+inmediatamente (sin cuenta de developer, sin verificación de negocio).
+
+Luego registra el webhook con una sola llamada (puedes correrla desde
+`curl`, Postman, o el navegador con la URL armada):
+
+```bash
+curl -X POST "https://api.telegram.org/bot<TELEGRAM_BOT_TOKEN>/setWebhook" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "url": "https://<project-ref>.functions.supabase.co/telegram-webhook",
+    "secret_token": "<el-mismo-TELEGRAM_WEBHOOK_SECRET-de-arriba>"
+  }'
+```
 
 **Pendiente conocido**: si dos tenants dieran de alta el mismo número de
 operador (poco probable en la práctica), la función toma el primer match y
 lo registra en el log — no hay hoy una forma de que el operador elija
-tenant desde WhatsApp.
+tenant.
 
 ### ✅ Fase 4 — Motor de geocercas
 
 **Validación automática** (`app.validate_trip_event_geofence`, trigger
 `BEFORE INSERT OR UPDATE OF lat, lng ON trip_events`): cualquier coordenada
-que llegue en un `trip_event` — por cualquier canal, no solo WhatsApp — se
+que llegue en un `trip_event` — por cualquier canal, no solo Telegram — se
 compara contra las geocercas activas del cliente del viaje
 (`ST_Contains` sobre `geom::geometry`) y se guarda `DENTRO`/`FUERA` +
 `geofence_match_id`. Sin lat/lng, el evento queda `SIN_VALIDAR`. Al vivir en
@@ -200,7 +225,7 @@ de la Fase 1, no solo en el cliente). Abre un modal pidiendo el motivo y
 actualiza `trip_delays.justified`/`reason` vía `supabase-js`; el cambio se
 refleja en tiempo real para cualquier otra sesión con Realtime abierto.
 
-### ✅ Fase 6 — Reporte de turno automático (PDF + WhatsApp)
+### ✅ Fase 6 — Reporte de turno automático (PDF + Telegram)
 
 **Cómo se dispara**: no hay una sola "hora de corte" global — cada turno
 tiene la suya, en su propio timezone. En vez de un cron por turno,
@@ -221,10 +246,12 @@ fecha de calendario), así que un turno que cruza medianoche no genera
 ambigüedad sobre "a qué día pertenece" (`window.ts`).
 
 **Envío**: sube el PDF a Storage (`shift-reports/{tenant_id}/{shift_id}/{fecha}.pdf`)
-y lo envía como WhatsApp *document message* a cada `profiles` con rol
-`JEFATURA` o `SEGURIDAD_PATRIMONIAL` (activo, con `phone` configurado) del
+y lo envía como documento de Telegram a cada `profiles` con rol `JEFATURA`
+o `SEGURIDAD_PATRIMONIAL` (activo, con `telegram_chat_id` configurado) del
 mismo tenant — no hace falta una tabla de contactos aparte, son "los
-Jefatura y Seguridad Patrimonial configurados" literalmente vía roles.
+Jefatura y Seguridad Patrimonial configurados" literalmente vía roles. Ese
+`telegram_chat_id` lo obtiene cada persona enviándole `/start` al bot
+(Fase 3) y pegándoselo a su ADMIN.
 
 **Regeneración manual**: la misma función acepta `POST { "shift_id": "..." }`
 desde el dashboard (con el JWT del usuario). Internamente valida que quien
@@ -233,7 +260,7 @@ sin ese chequeo, cualquier sesión válida podría forzar el reporte
 confidencial de otro tenant, porque el resto de la función usa el cliente
 `service_role` que ignora RLS.
 
-**Configuración** (además de los secrets de WhatsApp de la Fase 3):
+**Configuración** (además de los secrets de Telegram de la Fase 3):
 
 ```bash
 supabase functions deploy generate-shift-report
@@ -260,9 +287,9 @@ permisos, actívalas primero desde el Dashboard → Database → Extensions.
 supabase/
   migrations/                 # esquema SQL versionado + RLS
   functions/
-    _shared/                   # cliente admin, firma HMAC, cliente Graph API
-    whatsapp-webhook/           # Fase 3: webhook + máquina de estados
-    generate-shift-report/      # Fase 6: PDF + envío por WhatsApp
+    _shared/                   # cliente admin, cliente Telegram Bot API, normalización de teléfono
+    telegram-webhook/           # Fase 3: webhook + máquina de estados
+    generate-shift-report/      # Fase 6: PDF + envío por Telegram
 src/
   lib/                         # supabaseClient, tipos, auth/sesión, turno/semáforo
   login.ts                     # página de ingreso

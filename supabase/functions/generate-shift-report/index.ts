@@ -1,6 +1,6 @@
 import { createClient } from "npm:@supabase/supabase-js@2";
 import { supabaseAdmin } from "../_shared/supabaseAdmin.ts";
-import { sendDocument, uploadWhatsAppMedia } from "../_shared/whatsappApi.ts";
+import { sendDocument } from "../_shared/telegramApi.ts";
 import { buildShiftReportPdf } from "./pdf.ts";
 import { gatherShiftReportData } from "./report-data.ts";
 
@@ -9,7 +9,7 @@ type Db = ReturnType<typeof supabaseAdmin>;
 interface ProcessResult {
   shift_id: string;
   status: "GENERADO" | "ENVIADO" | "ERROR";
-  sent_to?: string[];
+  sent_to?: number[];
   error?: string;
 }
 
@@ -176,22 +176,21 @@ async function generateAndSend(
   const recipients = await getReportRecipients(db, shift.tenant_id);
 
   if (recipients.length === 0) {
-    console.warn(`Turno ${shiftId}: sin destinatarios JEFATURA/SEGURIDAD_PATRIMONIAL con teléfono configurado.`);
+    console.warn(`Turno ${shiftId}: sin destinatarios JEFATURA/SEGURIDAD_PATRIMONIAL con telegram_chat_id configurado.`);
     return { shift_id: shiftId, status: "GENERADO", sent_to: [] };
   }
 
   const filename = `reporte-turno-${reportDate}.pdf`;
-  const sentTo: string[] = [];
+  const sentTo: number[] = [];
   let anySendFailed = false;
 
-  for (const phone of recipients) {
+  for (const chatId of recipients) {
     try {
-      const mediaId = await uploadWhatsAppMedia(pdfBytes, "application/pdf", filename);
-      await sendDocument(phone, mediaId, filename, `Reporte de turno — ${reportDate}`);
-      sentTo.push(phone);
+      await sendDocument(chatId, pdfBytes, filename, `Reporte de turno — ${reportDate}`);
+      sentTo.push(chatId);
     } catch (error) {
       anySendFailed = true;
-      console.error(`No se pudo enviar el reporte del turno ${shiftId} a ${phone}:`, error);
+      console.error(`No se pudo enviar el reporte del turno ${shiftId} a ${chatId}:`, error);
     }
   }
 
@@ -211,14 +210,14 @@ async function generateAndSend(
   };
 }
 
-async function getReportRecipients(db: Db, tenantId: string): Promise<string[]> {
+async function getReportRecipients(db: Db, tenantId: string): Promise<number[]> {
   const { data, error } = await db
     .from("profiles")
-    .select("phone")
+    .select("telegram_chat_id")
     .eq("tenant_id", tenantId)
     .eq("active", true)
     .in("role", ["JEFATURA", "SEGURIDAD_PATRIMONIAL"])
-    .not("phone", "is", null);
+    .not("telegram_chat_id", "is", null);
   if (error) throw error;
-  return (data ?? []).map((p) => p.phone as string).filter(Boolean);
+  return (data ?? []).map((p) => p.telegram_chat_id as number).filter(Boolean);
 }
