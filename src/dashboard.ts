@@ -21,6 +21,8 @@ const filterStatus = document.getElementById("filter-status") as HTMLSelectEleme
 const filterSemaforo = document.getElementById("filter-semaforo") as HTMLSelectElement;
 const logoutLink = document.getElementById("logout-link") as HTMLAnchorElement;
 
+const mapEmptyState = document.getElementById("map-empty-state") as HTMLParagraphElement;
+
 const justifyModal = document.getElementById("justify-modal") as HTMLDivElement;
 const justifyModalContext = document.getElementById("justify-modal-context") as HTMLParagraphElement;
 const justifyReasonInput = document.getElementById("justify-reason") as HTMLTextAreaElement;
@@ -35,6 +37,36 @@ let canJustifyDelays = false;
 let activeDelayId: string | null = null;
 const lastEventByTrip = new Map<string, TripEventRow>();
 const lastDelayByTrip = new Map<string, TripDelayRow>();
+
+const SEMAFORO_COLOR: Record<Semaforo, string> = {
+  verde: "#22c55e",
+  amarillo: "#eab308",
+  rojo: "#ef4444",
+};
+
+// Leaflet se carga vía <script> externo (CDN); si falla (red bloqueada,
+// CDN caído) queremos degradar con un mensaje claro, no tumbar el resto
+// del dashboard (tabla, filtros, etc. no dependen del mapa).
+const mapAvailable = typeof L !== "undefined";
+let map: ReturnType<typeof L.map> | undefined;
+let markersLayer: ReturnType<typeof L.layerGroup> | undefined;
+const markerByTrip = new Map<string, ReturnType<typeof L.circleMarker>>();
+let hasFitMapBounds = false;
+
+if (mapAvailable) {
+  map = L.map("live-map").setView([19.4326, -99.1332], 6);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "&copy; OpenStreetMap contributors",
+    maxZoom: 19,
+  }).addTo(map);
+  markersLayer = L.layerGroup().addTo(map);
+} else {
+  console.error("Leaflet no cargó (revisa conectividad al CDN); el mapa en vivo no estará disponible.");
+  const mapEl = document.getElementById("live-map");
+  if (mapEl) {
+    mapEl.outerHTML = `<p class="empty-state">No se pudo cargar el mapa (sin conexión al CDN de Leaflet). El resto de la página sigue funcionando.</p>`;
+  }
+}
 
 async function loadShiftsAndThresholds() {
   const [{ data: shifts, error: shiftsError }, { data: thresholdsRow }] = await Promise.all([
@@ -142,6 +174,7 @@ function render() {
     .filter((r) => !semaforoFilter || r.semaforo === semaforoFilter);
 
   renderSummary(rows.map((r) => r.semaforo));
+  renderMap(rows);
 
   if (rows.length === 0) {
     tbody.innerHTML = `<tr><td colspan="10" class="empty-state">Sin viajes activos que coincidan con el filtro.</td></tr>`;
@@ -170,6 +203,68 @@ function render() {
       `;
     })
     .join("");
+}
+
+function renderMap(
+  rows: { trip: TripRow; lastEvent: TripEventRow | undefined; semaforo: Semaforo }[]
+): void {
+  if (!mapAvailable || !map || !markersLayer) return;
+
+  const seenTripIds = new Set<string>();
+  let anyMarker = false;
+
+  for (const { trip, lastEvent, semaforo } of rows) {
+    if (lastEvent?.lat == null || lastEvent?.lng == null) continue;
+    seenTripIds.add(trip.id);
+    anyMarker = true;
+
+    const color = SEMAFORO_COLOR[semaforo];
+    const popupHtml = `
+      <strong>${escapeHtml(trip.operators?.full_name ?? "Operador")}</strong><br>
+      ${escapeHtml(trip.route_name)} — ${statusLabel(trip.status)}<br>
+      Último evento: ${escapeHtml(lastEvent.event_type)} (hace ${minutesSince(lastEvent.reported_at)} min)
+    `;
+
+    let marker = markerByTrip.get(trip.id);
+    if (marker) {
+      marker.setLatLng([lastEvent.lat, lastEvent.lng]);
+      marker.setStyle({ color, fillColor: color });
+      marker.setPopupContent(popupHtml);
+    } else {
+      marker = L.circleMarker([lastEvent.lat, lastEvent.lng], {
+        radius: 9,
+        color,
+        fillColor: color,
+        fillOpacity: 0.85,
+        weight: 2,
+      }).bindPopup(popupHtml);
+      marker.addTo(markersLayer);
+      markerByTrip.set(trip.id, marker);
+    }
+  }
+
+  // Quita marcadores de viajes que ya no están activos o quedaron fuera del filtro
+  for (const [tripId, marker] of markerByTrip) {
+    if (!seenTripIds.has(tripId)) {
+      markersLayer.removeLayer(marker);
+      markerByTrip.delete(tripId);
+    }
+  }
+
+  mapEmptyState.hidden = anyMarker;
+  if (!anyMarker) {
+    mapEmptyState.textContent = "Ningún viaje activo ha reportado ubicación todavía.";
+  }
+
+  // Solo ajusta el encuadre la primera vez que hay marcadores; después
+  // respeta el pan/zoom del usuario en cada actualización en vivo.
+  if (anyMarker && !hasFitMapBounds) {
+    const bounds = L.latLngBounds(Array.from(markerByTrip.values()).map((m) => m.getLatLng()));
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [30, 30], maxZoom: 14 });
+      hasFitMapBounds = true;
+    }
+  }
 }
 
 function renderSummary(semaforos: Semaforo[]) {

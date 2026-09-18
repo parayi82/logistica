@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Torre de Control — Viajes activos</title>
     <link rel="stylesheet" href="/src/styles.css" />
+    <!-- Sin integrity/crossorigin a propósito: cópialos de
+         https://leafletjs.com/download.html si quieres fijar SRI. -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   </head>
   <body>
     <div class="topbar">
@@ -33,6 +36,9 @@
           <option value="rojo">Rojo</option>
         </select>
       </div>
+
+      <p id="map-empty-state" class="empty-state" hidden></p>
+      <div id="live-map" style="height: 340px; border-radius: 12px; overflow: hidden; margin-bottom: 16px"></div>
 
       <table>
         <thead>
@@ -74,6 +80,7 @@
       </div>
     </div>
 
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script type="module" src="/src/dashboard.ts"></script>
   </body>
 </html>
