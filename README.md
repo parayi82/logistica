@@ -53,10 +53,13 @@ probar:
 ## Roadmap
 
 Las 6 fases originales están implementadas. Lo que queda es trabajo de
-"último kilómetro" específico de cada instalación (crear la app de Meta,
-generar los secrets de Vault, cargar el catálogo real de clientes/turnos/
-checklist) — no código pendiente. Ver la nota al final de cada fase para
-el detalle de qué configurar.
+"último kilómetro" específico de cada instalación (crear el bot de
+Telegram, generar los secrets de Vault, cargar el catálogo real de
+clientes/turnos/checklist) — no código pendiente. Ver la nota al final de
+cada fase para el detalle de qué configurar.
+
+A partir de la Fase 7, el roadmap continúa con mejoras solicitadas después
+del despliegue inicial (mapa en vivo, alertas proactivas, y las que sigan).
 
 ### ✅ Fase 1 — Modelo de datos multi-tenant
 Esquema en Postgres con RLS por tenant y por rol: tenants, perfiles/roles,
@@ -281,6 +284,45 @@ select vault.create_secret('<tu service_role key>', 'service_role_key');
 Si `create extension pg_cron;`/`pg_net;` fallan en la migración por
 permisos, actívalas primero desde el Dashboard → Database → Extensions.
 
+### ✅ Fase 7 — Mapa en vivo
+
+El dashboard principal (`dashboard.html`) incluye un mapa Leaflet arriba de
+la tabla, mostrando la última posición conocida (`lat`/`lng` de
+`trip_events`) de cada viaje activo del turno vigente, con un marcador
+coloreado según el mismo semáforo de cumplimiento de la tabla. No requiere
+hardware ni tablas nuevas — reutiliza la ubicación que ya llega por
+Telegram (Fase 3). Si un viaje nunca reportó ubicación, simplemente no
+tiene marcador (la tabla lo sigue mostrando normal).
+
+### ✅ Fase 8 — Alertas proactivas por Telegram
+
+Antes había que estar viendo el dashboard para notar un problema; ahora se
+notifica solo, sin esperar al reporte de turno. `app.notify_trip_alert`
+arma el mensaje, aplica un cooldown por `(trip_id, alert_type)` para no
+saturar Telegram, y encola la llamada al nuevo Edge Function
+`send-trip-alert` vía `pg_net` (mismo mecanismo y mismos secrets de Vault
+que la Fase 6). Se notifica a los mismos roles que reciben el reporte de
+turno (JEFATURA/SEGURIDAD_PATRIMONIAL, vía `telegram_chat_id`). Tres
+disparadores:
+
+1. **Fuera de geocerca** (inmediato): trigger `AFTER INSERT` en
+   `trip_events` cuando `geofence_validation_status = 'FUERA'`.
+2. **Atraso calculado** (inmediato): trigger `AFTER INSERT` en
+   `trip_delays` (la Fase 5 ya solo inserta ahí cuando hay atraso real).
+3. **Silencio prolongado** (periódico, cooldown de 30 min): barrido de
+   `pg_cron` cada 5 minutos (`app.check_silent_trips`) que replica en SQL
+   la misma regla de "rojo por tiempo" de `src/lib/semaforo.ts` — el simple
+   paso del tiempo no dispara ningún evento en la base, así que no hay
+   forma de detectarlo con un trigger.
+
+**Configuración**: ninguna nueva — reutiliza `TELEGRAM_BOT_TOKEN` y los
+secrets de Vault (`project_url`, `service_role_key`) ya creados en la Fase
+6. Solo hace falta desplegar la función:
+
+```bash
+supabase functions deploy send-trip-alert
+```
+
 ## Estructura del repositorio
 
 ```
@@ -290,10 +332,11 @@ supabase/
     _shared/                   # cliente admin, cliente Telegram Bot API, normalización de teléfono
     telegram-webhook/           # Fase 3: webhook + máquina de estados
     generate-shift-report/      # Fase 6: PDF + envío por Telegram
+    send-trip-alert/            # Fase 8: alertas proactivas por Telegram
 src/
   lib/                         # supabaseClient, tipos, auth/sesión, turno/semáforo
   login.ts                     # página de ingreso
-  dashboard.ts                  # torre de control en tiempo real
+  dashboard.ts                  # torre de control en tiempo real + mapa en vivo (Fase 7)
   geofences.ts                  # Fase 4: importador + mapa de geocercas
 index.html / login.html / dashboard.html / geofences.html
 ```
