@@ -193,10 +193,12 @@ trip_events`), automático sin importar el canal de entrada:
 - El resultado ya se ve en el dashboard de la Fase 2 (columna "Atraso"),
   sin cambios adicionales de UI: `dashboard.ts` ya leía `trip_delays`.
 
-Justificar un atraso (marcar `justified = true` + `reason`) ya estaba
-soportado desde la Fase 1 vía RLS (`ADMIN`/`JEFATURA` pueden actualizar
-`trip_delays`); falta solo la UI para hacerlo desde el dashboard, que se
-puede agregar cuando se necesite.
+**Justificar un atraso**: en la columna "Atraso" del dashboard, `ADMIN`/
+`JEFATURA` ven un enlace "Justificar" junto a cada atraso sin justificar
+(gateado también server-side por la policy `trip_delays_update_justificacion`
+de la Fase 1, no solo en el cliente). Abre un modal pidiendo el motivo y
+actualiza `trip_delays.justified`/`reason` vía `supabase-js`; el cambio se
+refleja en tiempo real para cualquier otra sesión con Realtime abierto.
 
 ### ✅ Fase 6 — Reporte de turno automático (PDF + WhatsApp)
 

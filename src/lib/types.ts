@@ -68,6 +68,7 @@ export interface TripDelayRow {
   trip_id: string;
   delay_minutes: number;
   justified: boolean;
+  reason: string | null;
   created_at: string;
 }
 

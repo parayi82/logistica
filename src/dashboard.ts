@@ -1,5 +1,5 @@
 import { supabase } from "@/lib/supabaseClient";
-import { requireSession } from "@/lib/auth";
+import { currentProfile, requireSession } from "@/lib/auth";
 import { findCurrentShift } from "@/lib/currentShift";
 import { computeSemaforo, minutesSince } from "@/lib/semaforo";
 import type {
@@ -21,9 +21,18 @@ const filterStatus = document.getElementById("filter-status") as HTMLSelectEleme
 const filterSemaforo = document.getElementById("filter-semaforo") as HTMLSelectElement;
 const logoutLink = document.getElementById("logout-link") as HTMLAnchorElement;
 
+const justifyModal = document.getElementById("justify-modal") as HTMLDivElement;
+const justifyModalContext = document.getElementById("justify-modal-context") as HTMLParagraphElement;
+const justifyReasonInput = document.getElementById("justify-reason") as HTMLTextAreaElement;
+const justifyModalError = document.getElementById("justify-modal-error") as HTMLDivElement;
+const justifyCancelBtn = document.getElementById("justify-cancel") as HTMLButtonElement;
+const justifyConfirmBtn = document.getElementById("justify-confirm") as HTMLButtonElement;
+
 let currentShift: Shift | null = null;
 let thresholds: ProtocolThresholds | undefined;
 let trips: TripRow[] = [];
+let canJustifyDelays = false;
+let activeDelayId: string | null = null;
 const lastEventByTrip = new Map<string, TripEventRow>();
 const lastDelayByTrip = new Map<string, TripDelayRow>();
 
@@ -92,7 +101,7 @@ async function loadLastDelays() {
 
   const { data, error } = await supabase
     .from("trip_delays")
-    .select("id, trip_id, delay_minutes, justified, created_at")
+    .select("id, trip_id, delay_minutes, justified, reason, created_at")
     .in("trip_id", tripIds)
     .order("created_at", { ascending: false });
 
@@ -143,9 +152,7 @@ function render() {
     .map(({ trip, lastEvent, delay, semaforo }) => {
       const referenceTime = lastEvent?.reported_at ?? trip.current_status_since;
       const geofenceLabel = lastEvent?.geofence_validation_status ?? "SIN_VALIDAR";
-      const delayLabel = delay
-        ? `${delay.delay_minutes} min${delay.justified ? " (justificado)" : ""}`
-        : "—";
+      const delayLabel = renderDelayCell(delay);
 
       return `
         <tr>
@@ -177,10 +184,76 @@ function renderSummary(semaforos: Semaforo[]) {
   `;
 }
 
+function renderDelayCell(delay: TripDelayRow | undefined): string {
+  if (!delay) return "—";
+
+  if (delay.justified) {
+    const title = delay.reason ? ` title="${escapeHtml(delay.reason)}"` : "";
+    return `${delay.delay_minutes} min <span class="meta"${title}>(justificado)</span>`;
+  }
+
+  if (!canJustifyDelays) {
+    return `${delay.delay_minutes} min`;
+  }
+
+  return `${delay.delay_minutes} min · <button type="button" class="link-btn" data-justify-delay-id="${delay.id}">Justificar</button>`;
+}
+
 function escapeHtml(value: string): string {
   const div = document.createElement("div");
   div.textContent = value;
   return div.innerHTML;
+}
+
+function openJustifyModal(delayId: string): void {
+  const delay = trips
+    .map((t) => lastDelayByTrip.get(t.id))
+    .find((d) => d?.id === delayId);
+  const trip = delay ? trips.find((t) => t.id === delay.trip_id) : undefined;
+
+  activeDelayId = delayId;
+  justifyReasonInput.value = "";
+  justifyModalError.textContent = "";
+  justifyModalContext.textContent = trip
+    ? `${trip.operators?.full_name ?? "Operador"} — ${trip.route_name} (${delay?.delay_minutes} min de atraso)`
+    : `${delay?.delay_minutes ?? "?"} min de atraso`;
+  justifyModal.hidden = false;
+  justifyReasonInput.focus();
+}
+
+function closeJustifyModal(): void {
+  activeDelayId = null;
+  justifyModal.hidden = true;
+}
+
+async function confirmJustify(): Promise<void> {
+  if (!activeDelayId) return;
+  const reason = justifyReasonInput.value.trim();
+  if (!reason) {
+    justifyModalError.textContent = "Escribe un motivo antes de guardar.";
+    return;
+  }
+
+  justifyConfirmBtn.disabled = true;
+  const { data: session } = await supabase.auth.getSession();
+
+  const { data, error } = await supabase
+    .from("trip_delays")
+    .update({ justified: true, reason, justified_by: session.session?.user.id })
+    .eq("id", activeDelayId)
+    .select("id, trip_id, delay_minutes, justified, reason, created_at")
+    .single();
+
+  justifyConfirmBtn.disabled = false;
+
+  if (error) {
+    justifyModalError.textContent = `No se pudo guardar: ${error.message}`;
+    return;
+  }
+
+  lastDelayByTrip.set(data.trip_id, data as TripDelayRow);
+  closeJustifyModal();
+  render();
 }
 
 function subscribeRealtime() {
@@ -205,9 +278,15 @@ function subscribeRealtime() {
 
   supabase
     .channel("torre-control-delays")
-    .on("postgres_changes", { event: "INSERT", schema: "public", table: "trip_delays" }, (payload) => {
+    .on("postgres_changes", { event: "*", schema: "public", table: "trip_delays" }, (payload) => {
+      if (payload.eventType === "DELETE") return;
       const delay = payload.new as TripDelayRow;
-      lastDelayByTrip.set(delay.trip_id, delay);
+      const existing = lastDelayByTrip.get(delay.trip_id);
+      // Reemplaza si es más reciente, o si es una actualización (ej. justificación)
+      // del mismo atraso que ya estábamos mostrando.
+      if (!existing || existing.id === delay.id || new Date(delay.created_at) >= new Date(existing.created_at)) {
+        lastDelayByTrip.set(delay.trip_id, delay);
+      }
       render();
     })
     .subscribe();
@@ -217,12 +296,25 @@ async function init() {
   const session = await requireSession();
   userEmailEl.textContent = session.user.email ?? "";
 
+  const profile = await currentProfile(session.user.id);
+  canJustifyDelays = profile.role === "ADMIN" || profile.role === "JEFATURA";
+
   filterStatus.addEventListener("change", render);
   filterSemaforo.addEventListener("change", render);
   logoutLink.addEventListener("click", async (event) => {
     event.preventDefault();
     await supabase.auth.signOut();
     window.location.href = "/login.html";
+  });
+
+  tbody.addEventListener("click", (event) => {
+    const target = (event.target as HTMLElement).closest<HTMLElement>("[data-justify-delay-id]");
+    if (target) openJustifyModal(target.dataset.justifyDelayId!);
+  });
+  justifyCancelBtn.addEventListener("click", closeJustifyModal);
+  justifyConfirmBtn.addEventListener("click", () => confirmJustify().catch(console.error));
+  justifyModal.addEventListener("click", (event) => {
+    if (event.target === justifyModal) closeJustifyModal();
   });
 
   await loadShiftsAndThresholds();

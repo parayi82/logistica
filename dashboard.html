@@ -57,6 +57,23 @@
       </table>
     </main>
 
+    <div class="modal-overlay" id="justify-modal" hidden>
+      <div class="card modal">
+        <h2>Justificar atraso</h2>
+        <p class="meta" id="justify-modal-context"></p>
+
+        <label for="justify-reason">Motivo</label>
+        <textarea id="justify-reason" rows="3" placeholder="Ej. tráfico por bloqueo en carretera, autorizado por despacho…"></textarea>
+
+        <div class="error" id="justify-modal-error"></div>
+
+        <div class="modal-actions">
+          <button type="button" id="justify-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="justify-confirm">Guardar justificación</button>
+        </div>
+      </div>
+    </div>
+
     <script type="module" src="/src/dashboard.ts"></script>
   </body>
 </html>
