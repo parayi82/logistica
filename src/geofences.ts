@@ -8,6 +8,7 @@ const readonlyNote = document.getElementById("readonly-note") as HTMLParagraphEl
 const fileInput = document.getElementById("geojson-file") as HTMLInputElement;
 const importBtn = document.getElementById("import-btn") as HTMLButtonElement;
 const resultsEl = document.getElementById("import-results") as HTMLDivElement;
+const mapEmptyState = document.getElementById("map-empty-state") as HTMLParagraphElement;
 const userEmailEl = document.getElementById("user-email") as HTMLSpanElement;
 
 let isAdmin = false;
@@ -52,11 +53,12 @@ async function loadGeofences(clientId: string): Promise<GeofenceGeoJsonRow[]> {
 
 function renderGeofences(geofences: GeofenceGeoJsonRow[]): void {
   if (geofences.length === 0) {
-    resultsEl.innerHTML = `<p class="empty-state">Este cliente no tiene geocercas importadas todavía.</p>`;
+    mapEmptyState.textContent = "Este cliente no tiene geocercas importadas todavía.";
+    mapEmptyState.hidden = false;
     geofenceLayer?.clearLayers();
     return;
   }
-  resultsEl.innerHTML = "";
+  mapEmptyState.hidden = true;
 
   if (!mapAvailable || !map || !geofenceLayer) return;
   geofenceLayer.clearLayers();
