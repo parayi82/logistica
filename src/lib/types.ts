@@ -124,6 +124,48 @@ export interface ClientRow {
   id: string;
   name: string;
   code: string | null;
+  active: boolean;
+}
+
+export interface OperatorRow {
+  id: string;
+  full_name: string;
+  phone_e164: string;
+  license_number: string | null;
+  active: boolean;
+}
+
+export interface VehicleRow {
+  id: string;
+  plate: string;
+  economic_number: string | null;
+  vehicle_type: string | null;
+  box_has_gps: boolean;
+  active: boolean;
+}
+
+export type QuoteStatus = "PENDIENTE" | "APROBADA" | "RECHAZADA" | "CONVERTIDA";
+
+export interface QuoteRow {
+  id: string;
+  tenant_id: string;
+  client_id: string;
+  provider_id: string | null;
+  operator_id: string | null;
+  vehicle_id: string | null;
+  route_name: string | null;
+  origin: string | null;
+  destination: string | null;
+  rate: number | null;
+  currency: string;
+  status: QuoteStatus;
+  notes: string | null;
+  converted_trip_id: string | null;
+  created_at: string;
+  clients?: { name: string } | null;
+  providers?: { name: string; is_independent: boolean } | null;
+  operators?: { full_name: string } | null;
+  vehicles?: { plate: string } | null;
 }
 
 export interface GeoJsonPolygon {

@@ -17,6 +17,8 @@ export default defineConfig({
         geofences: resolve(__dirname, "geofences.html"),
         reportes: resolve(__dirname, "reportes.html"),
         bitacora: resolve(__dirname, "bitacora.html"),
+        catalogos: resolve(__dirname, "catalogos.html"),
+        cotizaciones: resolve(__dirname, "cotizaciones.html"),
       },
     },
   },

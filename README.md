@@ -448,6 +448,32 @@ hubiera reemplazado la función, habría creado un segundo overload).
 supabase functions deploy telegram-webhook --no-verify-jwt
 ```
 
+### ✅ Fase 14 — Catálogos y cotizaciones
+
+Dos páginas nuevas para operar sin tocar SQL:
+
+- **`catalogos.html`**: alta/edición de Clientes, Proveedores, Operadores
+  y Vehículos, cada uno en su propia tabla. Antes solo un `ADMIN` podía
+  escribir estas tablas (y sin ninguna pantalla para hacerlo); ahora
+  `ADMIN`/`JEFATURA`/`MONITOR` pueden (mismo patrón de roles que ya usaban
+  `trips`/`providers` desde la Fase 13-14), borrar sigue siendo solo
+  `ADMIN`.
+- **`cotizaciones.html`**: nueva tabla `quotes` para enlazar cliente +
+  proveedor + camionero (operador) + unidad **antes** de confirmar el
+  viaje, con tarifa/moneda y estatus (Pendiente → Aprobada/Rechazada →
+  Convertida). Una cotización **Aprobada** tiene el botón "Convertir a
+  viaje": abre un modal precargado con los datos de la cotización, pide
+  lo que falta (turno, ruta si no se había capturado, fecha de salida) y
+  crea el viaje real en `trips` enlazándolo de vuelta
+  (`quotes.converted_trip_id`). Proveedor/operador/unidad son opcionales
+  en la cotización (se puede cotizar antes de asignar camionero).
+  Oculta a `CLIENTE_VIEW` (mismo criterio que la Bitácora: es información
+  comercial/operativa interna).
+
+**Configuración**: correr la migración
+`20260919000700_quotes_and_catalog_access.sql`. No requiere redeploy de
+Edge Functions (es solo esquema + frontend).
+
 ## Estructura del repositorio
 
 ```
@@ -465,5 +491,8 @@ src/
   geofences.ts                  # Fase 4: importador + mapa de geocercas
   reportes.ts                   # Fase 10: KPIs históricos por operador/cliente/ruta
   bitacora.ts                   # Fase 13: alta/edición de viajes + bitácora de detenciones
-index.html / login.html / dashboard.html / geofences.html / reportes.html / bitacora.html
+  catalogos.ts                  # Fase 14: alta/edición de clientes/proveedores/operadores/vehículos
+  cotizaciones.ts                # Fase 14: cotizaciones + convertir a viaje
+index.html / login.html / dashboard.html / geofences.html / reportes.html / bitacora.html /
+catalogos.html / cotizaciones.html
 ```

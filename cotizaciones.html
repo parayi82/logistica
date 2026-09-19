@@ -1,0 +1,157 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torre de Control — Cotizaciones</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <h1>Torre de Control — Cotizaciones</h1>
+      <div class="meta">
+        <a href="/dashboard.html" style="color: inherit">Viajes activos</a>
+        · <a href="/bitacora.html" style="color: inherit">Bitácora</a>
+        · <a href="/catalogos.html" style="color: inherit">Catálogos</a>
+        · <span id="user-email"></span>
+        · <a href="#" id="logout-link" style="color: inherit">Salir</a>
+      </div>
+    </div>
+
+    <main>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Cotizaciones</h2>
+        <button id="new-quote-btn" type="button" style="width: auto" hidden>+ Nueva cotización</button>
+      </div>
+
+      <p id="quotes-empty-state" class="empty-state" hidden></p>
+
+      <div style="overflow-x: auto">
+        <table style="min-width: 1100px">
+          <thead>
+            <tr>
+              <th>Cliente</th>
+              <th>Proveedor</th>
+              <th>Operador</th>
+              <th>Vehículo</th>
+              <th>Ruta</th>
+              <th>Tarifa</th>
+              <th>Estatus</th>
+              <th>Notas</th>
+              <th>Acciones</th>
+            </tr>
+          </thead>
+          <tbody id="quotes-tbody">
+            <tr><td colspan="9" class="empty-state">Cargando…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <!-- Modal: Nueva/Editar cotización -->
+    <div class="modal-overlay" id="quote-modal" hidden>
+      <div class="card modal" style="max-width: 520px">
+        <h2 id="quote-modal-title">Nueva cotización</h2>
+        <div class="error" id="quote-modal-error"></div>
+
+        <label for="quote-client">Cliente</label>
+        <select id="quote-client"></select>
+
+        <label for="quote-provider" style="margin-top: 10px">Proveedor (opcional)</label>
+        <select id="quote-provider"></select>
+
+        <label for="quote-operator" style="margin-top: 10px">Camionero propuesto (opcional)</label>
+        <select id="quote-operator"></select>
+
+        <label for="quote-vehicle" style="margin-top: 10px">Unidad propuesta (opcional)</label>
+        <select id="quote-vehicle"></select>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px">
+          <div>
+            <label for="quote-origin">Origen</label>
+            <input id="quote-origin" type="text" />
+          </div>
+          <div>
+            <label for="quote-destination">Destino</label>
+            <input id="quote-destination" type="text" />
+          </div>
+        </div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px">
+          <div>
+            <label for="quote-rate">Tarifa</label>
+            <input id="quote-rate" type="number" step="0.01" min="0" />
+          </div>
+          <div>
+            <label for="quote-currency">Moneda</label>
+            <select id="quote-currency">
+              <option value="MXN">MXN</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+        </div>
+
+        <label for="quote-notes" style="margin-top: 10px">Notas</label>
+        <textarea id="quote-notes" rows="2"></textarea>
+
+        <div class="modal-actions">
+          <button type="button" id="quote-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="quote-save">Guardar cotización</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Convertir a viaje -->
+    <div class="modal-overlay" id="convert-modal" hidden>
+      <div class="card modal" style="max-width: 520px">
+        <h2>Convertir cotización a viaje</h2>
+        <div class="error" id="convert-modal-error"></div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+          <div>
+            <label for="convert-shift">Turno</label>
+            <select id="convert-shift"></select>
+          </div>
+          <div>
+            <label for="convert-folio">Folio (opcional)</label>
+            <input id="convert-folio" type="text" />
+          </div>
+
+          <div>
+            <label for="convert-operator">Operador</label>
+            <select id="convert-operator"></select>
+          </div>
+          <div>
+            <label for="convert-vehicle">Unidad</label>
+            <select id="convert-vehicle"></select>
+          </div>
+
+          <div>
+            <label for="convert-route-name">Ruta</label>
+            <input id="convert-route-name" type="text" />
+          </div>
+          <div>
+            <label for="convert-scheduled-departure">Fecha salida</label>
+            <input id="convert-scheduled-departure" type="datetime-local" />
+          </div>
+
+          <div>
+            <label for="convert-origin">Origen</label>
+            <input id="convert-origin" type="text" />
+          </div>
+          <div>
+            <label for="convert-destination">Destino</label>
+            <input id="convert-destination" type="text" />
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="convert-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="convert-save">Crear viaje</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/cotizaciones.ts"></script>
+  </body>
+</html>
