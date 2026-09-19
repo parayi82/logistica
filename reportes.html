@@ -33,6 +33,9 @@
         </select>
 
         <button id="run-report-btn" type="button" style="margin-top: 14px">Generar reporte</button>
+        <button id="download-csv-btn" type="button" class="btn-secondary" style="margin-top: 14px; margin-left: 8px">
+          Descargar CSV
+        </button>
       </div>
 
       <div class="summary-row" id="summary-row"></div>
@@ -48,7 +51,7 @@
             <th>Justificados</th>
             <th>No justificados</th>
             <th>Fuera de geocerca</th>
-            <th>Escalamientos a Seguridad</th>
+            <th id="escalation-col-header">Escalamientos a Seguridad</th>
           </tr>
         </thead>
         <tbody id="report-tbody">

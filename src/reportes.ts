@@ -12,10 +12,12 @@ const fromInput = document.getElementById("from-date") as HTMLInputElement;
 const toInput = document.getElementById("to-date") as HTMLInputElement;
 const groupBySelect = document.getElementById("group-by") as HTMLSelectElement;
 const runBtn = document.getElementById("run-report-btn") as HTMLButtonElement;
+const downloadBtn = document.getElementById("download-csv-btn") as HTMLButtonElement;
 const summaryRow = document.getElementById("summary-row") as HTMLDivElement;
 const emptyState = document.getElementById("report-empty-state") as HTMLParagraphElement;
 const tbody = document.getElementById("report-tbody") as HTMLTableSectionElement;
 const groupColHeader = document.getElementById("group-col-header") as HTMLTableCellElement;
+const escalationColHeader = document.getElementById("escalation-col-header") as HTMLTableCellElement;
 const logoutLink = document.getElementById("logout-link") as HTMLAnchorElement;
 
 const GROUP_LABELS: Record<ReportGroupBy, string> = {
@@ -23,6 +25,13 @@ const GROUP_LABELS: Record<ReportGroupBy, string> = {
   client: "Cliente",
   route: "Ruta",
 };
+
+// Las alertas de escalamiento a Seguridad Patrimonial son información
+// operativa interna (Fase 9); un CLIENTE_VIEW ve su historial de
+// cumplimiento/atrasos, pero no ese detalle de seguridad.
+let showEscalationColumn = true;
+let lastGroupBy: ReportGroupBy = "operator";
+let lastRows: KpiGroupStats[] = [];
 
 function toDateInputValue(date: Date): string {
   return date.toISOString().slice(0, 10);
@@ -132,15 +141,25 @@ function renderSummary(rows: KpiGroupStats[]) {
   const totalFuera = rows.reduce((acc, r) => acc + r.fueraDeGeocerca, 0);
   const totalEscalamientos = rows.reduce((acc, r) => acc + r.escalamientosSeguridad, 0);
 
-  summaryRow.innerHTML = `
-    <div class="summary-chip">${totalTripsWithDelay} viajes con atraso</div>
-    <div class="summary-chip">${totalUnjustified} atrasos sin justificar</div>
-    <div class="summary-chip">${totalFuera} eventos fuera de geocerca</div>
-    <div class="summary-chip">${totalEscalamientos} escalamientos a Seguridad</div>
-  `;
+  const chips = [
+    `<div class="summary-chip">${totalTripsWithDelay} viajes con atraso</div>`,
+    `<div class="summary-chip">${totalUnjustified} atrasos sin justificar</div>`,
+    `<div class="summary-chip">${totalFuera} eventos fuera de geocerca</div>`,
+  ];
+  if (showEscalationColumn) {
+    chips.push(`<div class="summary-chip">${totalEscalamientos} escalamientos a Seguridad</div>`);
+  }
+  summaryRow.innerHTML = chips.join("");
+}
+
+function colspan(): number {
+  return showEscalationColumn ? 7 : 6;
 }
 
 function render(groupBy: ReportGroupBy, rows: KpiGroupStats[]) {
+  lastGroupBy = groupBy;
+  lastRows = rows;
+
   groupColHeader.textContent = GROUP_LABELS[groupBy];
   renderSummary(rows);
 
@@ -162,7 +181,7 @@ function render(groupBy: ReportGroupBy, rows: KpiGroupStats[]) {
           <td>${r.delaysJustified}</td>
           <td>${r.delaysUnjustified}</td>
           <td>${r.fueraDeGeocerca}</td>
-          <td>${r.escalamientosSeguridad}</td>
+          ${showEscalationColumn ? `<td>${r.escalamientosSeguridad}</td>` : ""}
         </tr>
       `
     )
@@ -175,15 +194,48 @@ async function runReport(): Promise<void> {
   const groupBy = groupBySelect.value as ReportGroupBy;
 
   runBtn.disabled = true;
-  tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Cargando…</td></tr>`;
+  tbody.innerHTML = `<tr><td colspan="${colspan()}" class="empty-state">Cargando…</td></tr>`;
   try {
     const [delays, alerts] = await Promise.all([loadDelays(fromIso, toIso), loadAlerts(fromIso, toIso)]);
     render(groupBy, aggregate(groupBy, delays, alerts));
   } catch (error) {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Error: ${escapeHtml((error as Error).message)}</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan()}" class="empty-state">Error: ${escapeHtml(
+      (error as Error).message
+    )}</td></tr>`;
   } finally {
     runBtn.disabled = false;
   }
+}
+
+function csvEscape(value: string | number): string {
+  const text = String(value);
+  if (/[",\n]/.test(text)) {
+    return `"${text.replace(/"/g, '""')}"`;
+  }
+  return text;
+}
+
+function downloadCsv(): void {
+  const headers = [GROUP_LABELS[lastGroupBy], "Viajes con atraso", "Atraso promedio (min)", "Justificados", "No justificados", "Fuera de geocerca"];
+  if (showEscalationColumn) headers.push("Escalamientos a Seguridad");
+
+  const lines = [headers.map(csvEscape).join(",")];
+  for (const r of lastRows) {
+    const cols = [r.label, r.tripsWithDelay, r.avgDelayMinutes, r.delaysJustified, r.delaysUnjustified, r.fueraDeGeocerca];
+    if (showEscalationColumn) cols.push(r.escalamientosSeguridad);
+    lines.push(cols.map(csvEscape).join(","));
+  }
+
+  // BOM para que Excel detecte UTF-8 y no rompa acentos/ñ.
+  const blob = new Blob(["﻿" + lines.join("\r\n")], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `reporte-${lastGroupBy}-${fromInput.value}_a_${toInput.value}.csv`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 async function init(): Promise<void> {
@@ -191,10 +243,8 @@ async function init(): Promise<void> {
   userEmailEl.textContent = session.user.email ?? "";
 
   const profile = await currentProfile(session.user.id);
-  if (profile.role === "CLIENTE_VIEW") {
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">No tienes acceso a esta página.</td></tr>`;
-    return;
-  }
+  showEscalationColumn = profile.role !== "CLIENTE_VIEW";
+  escalationColHeader.hidden = !showEscalationColumn;
 
   const today = new Date();
   const thirtyDaysAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
@@ -202,6 +252,7 @@ async function init(): Promise<void> {
   toInput.value = toDateInputValue(today);
 
   runBtn.addEventListener("click", () => runReport().catch(console.error));
+  downloadBtn.addEventListener("click", downloadCsv);
   logoutLink.addEventListener("click", async (event) => {
     event.preventDefault();
     await supabase.auth.signOut();
@@ -214,7 +265,7 @@ async function init(): Promise<void> {
 init().catch((error) => {
   if ((error as Error).message !== "no session") {
     console.error(error);
-    tbody.innerHTML = `<tr><td colspan="7" class="empty-state">Error cargando la página: ${escapeHtml(
+    tbody.innerHTML = `<tr><td colspan="${colspan()}" class="empty-state">Error cargando la página: ${escapeHtml(
       (error as Error).message
     )}</td></tr>`;
   }

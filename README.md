@@ -370,6 +370,20 @@ fuera de geocerca, y escalamientos a Seguridad Patrimonial.
 **Configuración**: ninguna — son solo 2 vistas SQL, sin Edge Function ni
 secrets nuevos.
 
+### ✅ Fase 11 — Exportar a CSV para CLIENTE_VIEW
+
+Sin tocar SQL: las vistas de la Fase 10 ya filtran automáticamente por
+cliente para `CLIENTE_VIEW` (vía `app.can_view_client`, la misma función
+de la Fase 1), así que solo hacía falta abrirles la página (antes
+bloqueada para ese rol) y ocultarles la columna "Escalamientos a
+Seguridad" (información operativa interna de la Fase 9, no pensada para
+clientes externos). Botón "Descargar CSV" en `reportes.html` — exporta lo
+que esté renderizado en ese momento (respeta el rango de fechas y
+agrupación elegidos), 100% en el navegador (`Blob` + `<a download>`, sin
+Edge Function), con BOM UTF-8 para que Excel no rompa acentos/ñ.
+
+**Configuración**: ninguna nueva.
+
 ## Estructura del repositorio
 
 ```
