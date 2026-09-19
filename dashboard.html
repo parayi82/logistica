@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torre de Control — Viajes activos</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <!-- Sin integrity/crossorigin a propósito: cópialos de
+         https://leafletjs.com/download.html si quieres fijar SRI. -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <h1 id="shift-title">Torre de Control</h1>
+      <div class="meta">
+        <a href="/geofences.html" style="color: inherit">Geocercas</a>
+        · <a href="/reportes.html" style="color: inherit">Reportes</a>
+        · <a href="/bitacora.html" style="color: inherit">Bitácora</a>
+        · <a href="/catalogos.html" style="color: inherit">Catálogos</a>
+        · <a href="/cotizaciones.html" style="color: inherit">Cotizaciones</a>
+        · <span id="user-email"></span>
+        · <a href="#" id="logout-link" style="color: inherit">Salir</a>
+      </div>
+    </div>
+
+    <main>
+      <div class="summary-row" id="summary-row"></div>
+
+      <div class="filters">
+        <select id="filter-status">
+          <option value="">Todos los estatus</option>
+          <option value="PROGRAMADO">Programado</option>
+          <option value="EN_TRANSITO">En tránsito</option>
+          <option value="DETENIDO">Detenido</option>
+        </select>
+        <select id="filter-semaforo">
+          <option value="">Todos los semáforos</option>
+          <option value="verde">Verde</option>
+          <option value="amarillo">Amarillo</option>
+          <option value="rojo">Rojo</option>
+        </select>
+      </div>
+
+      <p id="map-empty-state" class="empty-state" hidden></p>
+      <div id="live-map" style="height: 340px; border-radius: 12px; overflow: hidden; margin-bottom: 16px"></div>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Semáforo</th>
+            <th>Operador</th>
+            <th>Unidad</th>
+            <th>Cliente</th>
+            <th>Ruta</th>
+            <th>Estatus</th>
+            <th>Desde hace</th>
+            <th>Último evento</th>
+            <th>Geocerca</th>
+            <th>Atraso</th>
+          </tr>
+        </thead>
+        <tbody id="trips-tbody">
+          <tr>
+            <td colspan="10" class="empty-state">Cargando viajes activos…</td>
+          </tr>
+        </tbody>
+      </table>
+    </main>
+
+    <div class="modal-overlay" id="justify-modal" hidden>
+      <div class="card modal">
+        <h2>Justificar atraso</h2>
+        <p class="meta" id="justify-modal-context"></p>
+
+        <label for="justify-reason">Motivo</label>
+        <textarea id="justify-reason" rows="3" placeholder="Ej. tráfico por bloqueo en carretera, autorizado por despacho…"></textarea>
+
+        <div class="error" id="justify-modal-error"></div>
+
+        <div class="modal-actions">
+          <button type="button" id="justify-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="justify-confirm">Guardar justificación</button>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module" src="/src/dashboard.ts"></script>
+  </body>
+</html>

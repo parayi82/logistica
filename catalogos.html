@@ -1,0 +1,182 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torre de Control — Catálogos</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <h1>Torre de Control — Catálogos</h1>
+      <div class="meta">
+        <a href="/dashboard.html" style="color: inherit">Viajes activos</a>
+        · <a href="/bitacora.html" style="color: inherit">Bitácora</a>
+        · <a href="/cotizaciones.html" style="color: inherit">Cotizaciones</a>
+        · <span id="user-email"></span>
+        · <a href="#" id="logout-link" style="color: inherit">Salir</a>
+      </div>
+    </div>
+
+    <main>
+      <!-- Clientes -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Clientes</h2>
+        <button id="new-client-btn" type="button" style="width: auto" hidden>+ Nuevo cliente</button>
+      </div>
+      <table style="margin-bottom: 28px">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Código</th>
+            <th>Activo</th>
+            <th id="client-edit-col-header" hidden>Editar</th>
+          </tr>
+        </thead>
+        <tbody id="clients-tbody">
+          <tr><td colspan="4" class="empty-state">Cargando…</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Proveedores -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Proveedores</h2>
+        <button id="new-provider-btn" type="button" style="width: auto" hidden>+ Nuevo proveedor</button>
+      </div>
+      <table style="margin-bottom: 28px">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Independiente</th>
+            <th>Activo</th>
+            <th id="provider-edit-col-header" hidden>Editar</th>
+          </tr>
+        </thead>
+        <tbody id="providers-tbody">
+          <tr><td colspan="4" class="empty-state">Cargando…</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Operadores -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Operadores</h2>
+        <button id="new-operator-btn" type="button" style="width: auto" hidden>+ Nuevo operador</button>
+      </div>
+      <table style="margin-bottom: 28px">
+        <thead>
+          <tr>
+            <th>Nombre</th>
+            <th>Teléfono</th>
+            <th>Licencia</th>
+            <th>Activo</th>
+            <th id="operator-edit-col-header" hidden>Editar</th>
+          </tr>
+        </thead>
+        <tbody id="operators-tbody">
+          <tr><td colspan="5" class="empty-state">Cargando…</td></tr>
+        </tbody>
+      </table>
+
+      <!-- Vehículos -->
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Vehículos</h2>
+        <button id="new-vehicle-btn" type="button" style="width: auto" hidden>+ Nuevo vehículo</button>
+      </div>
+      <table>
+        <thead>
+          <tr>
+            <th>Placa</th>
+            <th>ECO</th>
+            <th>Tipo</th>
+            <th>Caja con GPS</th>
+            <th>Activo</th>
+            <th id="vehicle-edit-col-header" hidden>Editar</th>
+          </tr>
+        </thead>
+        <tbody id="vehicles-tbody">
+          <tr><td colspan="6" class="empty-state">Cargando…</td></tr>
+        </tbody>
+      </table>
+    </main>
+
+    <!-- Modal: Cliente -->
+    <div class="modal-overlay" id="client-modal" hidden>
+      <div class="card modal">
+        <h2 id="client-modal-title">Nuevo cliente</h2>
+        <div class="error" id="client-modal-error"></div>
+        <label for="client-name">Nombre</label>
+        <input id="client-name" type="text" />
+        <label for="client-code" style="margin-top: 10px">Código (opcional)</label>
+        <input id="client-code" type="text" />
+        <label for="client-active" style="display: inline; margin-top: 10px">Activo</label>
+        <input id="client-active" type="checkbox" style="width: auto; margin-left: 8px" checked />
+        <div class="modal-actions">
+          <button type="button" id="client-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="client-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Proveedor -->
+    <div class="modal-overlay" id="provider-modal" hidden>
+      <div class="card modal">
+        <h2 id="provider-modal-title">Nuevo proveedor</h2>
+        <div class="error" id="provider-modal-error"></div>
+        <label for="provider-name">Nombre</label>
+        <input id="provider-name" type="text" />
+        <label for="provider-independent" style="display: inline; margin-top: 10px">Independiente</label>
+        <input id="provider-independent" type="checkbox" style="width: auto; margin-left: 8px" />
+        <label for="provider-active" style="display: inline; margin-top: 10px">Activo</label>
+        <input id="provider-active" type="checkbox" style="width: auto; margin-left: 8px" checked />
+        <div class="modal-actions">
+          <button type="button" id="provider-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="provider-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Operador -->
+    <div class="modal-overlay" id="operator-modal" hidden>
+      <div class="card modal">
+        <h2 id="operator-modal-title">Nuevo operador</h2>
+        <div class="error" id="operator-modal-error"></div>
+        <label for="operator-name">Nombre completo</label>
+        <input id="operator-name" type="text" />
+        <label for="operator-phone" style="margin-top: 10px">Teléfono (formato +52...)</label>
+        <input id="operator-phone" type="text" placeholder="+525512345678" />
+        <label for="operator-license" style="margin-top: 10px">Licencia (opcional)</label>
+        <input id="operator-license" type="text" />
+        <label for="operator-active" style="display: inline; margin-top: 10px">Activo</label>
+        <input id="operator-active" type="checkbox" style="width: auto; margin-left: 8px" checked />
+        <div class="modal-actions">
+          <button type="button" id="operator-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="operator-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal: Vehículo -->
+    <div class="modal-overlay" id="vehicle-modal" hidden>
+      <div class="card modal">
+        <h2 id="vehicle-modal-title">Nuevo vehículo</h2>
+        <div class="error" id="vehicle-modal-error"></div>
+        <label for="vehicle-plate">Placa</label>
+        <input id="vehicle-plate" type="text" />
+        <label for="vehicle-eco" style="margin-top: 10px">ECO (número económico)</label>
+        <input id="vehicle-eco" type="text" />
+        <label for="vehicle-type" style="margin-top: 10px">Tipo (opcional)</label>
+        <input id="vehicle-type" type="text" placeholder="Ej. Tráiler, Torton…" />
+        <label for="vehicle-gps" style="display: inline; margin-top: 10px">Caja con GPS</label>
+        <input id="vehicle-gps" type="checkbox" style="width: auto; margin-left: 8px" />
+        <label for="vehicle-active" style="display: inline; margin-top: 10px">Activo</label>
+        <input id="vehicle-active" type="checkbox" style="width: auto; margin-left: 8px" checked />
+        <div class="modal-actions">
+          <button type="button" id="vehicle-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="vehicle-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/catalogos.ts"></script>
+  </body>
+</html>

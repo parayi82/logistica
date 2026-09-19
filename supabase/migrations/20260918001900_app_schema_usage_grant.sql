@@ -1,0 +1,11 @@
+-- =========================================================================
+-- Corrige un bug real: nunca se otorgó USAGE sobre el schema "app" a los
+-- roles authenticated/service_role, solo EXECUTE sobre funciones
+-- individuales. Sin USAGE en el schema, Postgres no permite ni siquiera
+-- referenciar app.<funcion>() en la expresión de una policy de RLS
+-- (SECURITY DEFINER solo cambia los privilegios DENTRO de la función, no
+-- si el rol que llama puede invocarla), así que toda policy de RLS que usa
+-- app.current_tenant_id()/current_role()/can_view_client()/etc. fallaba
+-- con "permission denied for schema app" para cualquier usuario real.
+-- =========================================================================
+grant usage on schema app to authenticated, service_role;

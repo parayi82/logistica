@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torre de Control — Geocercas</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+    <!-- Sin integrity/crossorigin a propósito: cópialos de
+         https://leafletjs.com/download.html si quieres fijar SRI. -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <h1>Torre de Control — Geocercas</h1>
+      <div class="meta">
+        <a href="/dashboard.html" style="color: inherit">← Viajes activos</a>
+        · <span id="user-email"></span>
+      </div>
+    </div>
+
+    <main>
+      <div class="card" style="margin-bottom: 16px">
+        <label for="client-select">Cliente</label>
+        <select id="client-select"></select>
+
+        <div id="admin-only" hidden>
+          <label for="geojson-file" style="margin-top: 14px">
+            Importar mapa (GeoJSON exportado de Google My Maps)
+          </label>
+          <input id="geojson-file" type="file" accept=".geojson,.json,application/geo+json,application/json" />
+          <button id="import-btn" type="button" style="margin-top: 10px">Importar geocercas</button>
+        </div>
+        <p id="readonly-note" class="error" hidden style="color: var(--text-dim)">
+          Solo un ADMIN puede importar geocercas. Puedes ver el mapa de las ya existentes.
+        </p>
+      </div>
+
+      <div id="import-results"></div>
+
+      <p id="map-empty-state" class="empty-state" hidden></p>
+      <div id="map" style="height: 480px; border-radius: 12px; overflow: hidden"></div>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script type="module" src="/src/geofences.ts"></script>
+  </body>
+</html>
