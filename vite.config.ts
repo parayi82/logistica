@@ -16,6 +16,7 @@ export default defineConfig({
         dashboard: resolve(__dirname, "dashboard.html"),
         geofences: resolve(__dirname, "geofences.html"),
         reportes: resolve(__dirname, "reportes.html"),
+        bitacora: resolve(__dirname, "bitacora.html"),
       },
     },
   },

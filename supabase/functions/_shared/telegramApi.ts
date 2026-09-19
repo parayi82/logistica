@@ -51,6 +51,19 @@ export function answerCallbackQuery(callbackQueryId: string, text?: string): Pro
   return callApi("answerCallbackQuery", { callback_query_id: callbackQueryId, text });
 }
 
+/** Pregunta de una sola fila de botones (ej. Sí/No para "¿Apagaste el motor?"). */
+export function sendInlineButtons(
+  chatId: number,
+  text: string,
+  buttons: { text: string; callback_data: string }[]
+): Promise<unknown> {
+  return callApi("sendMessage", {
+    chat_id: chatId,
+    text,
+    reply_markup: { inline_keyboard: [buttons] },
+  });
+}
+
 /** Botón nativo para que el operador comparta su teléfono (Telegram confirma que es el suyo). */
 export function requestPhoneNumber(chatId: number, bodyText: string): Promise<unknown> {
   return callApi("sendMessage", {

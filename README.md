@@ -406,6 +406,48 @@ bucket `trip-evidence` ya existentes. Solo hace falta el redeploy:
 supabase functions deploy telegram-webhook --no-verify-jwt
 ```
 
+### ✅ Fase 13 — Bitácora de protocolo de seguridad
+
+Nueva página `bitacora.html` (visible para todos los roles internos,
+oculta a `CLIENTE_VIEW`) con dos tablas:
+
+- **Viajes bajo protocolo**: alta y edición de viajes desde el dashboard
+  (antes solo existían por SQL manual). Formulario con los campos nuevos
+  de `trips`: folio, bajo protocolo, proveedor, modalidad, doc. de
+  transporte y encargado (un `profile` interno responsable del viaje).
+  El selector de proveedor incluye un alta rápida ("¿Proveedor nuevo?")
+  que crea el registro en la nueva tabla `providers` (nombre + si es
+  independiente) sin salir del modal.
+- **Bitácora de detenciones**: una fila por cada evento `DETENCION`, con
+  el layout exacto que ya usa el cliente en su hoja de cálculo (BAJO
+  PROTOCOLO, Folio, Cliente, Proveedor, Prv. Independiente, Operador,
+  Modalidad, Placa, Caja con GPS, ECO, Doc. Transporte, Origen, Destino,
+  Fecha, Encargado, Estatus, Modificado, Lugar de detención,
+  Coordenadas, Motivo, Horario de reinicio, Paro de motor) y exportable
+  a CSV con esos mismos encabezados. "ECO" reutiliza
+  `vehicles.economic_number` (ya existía desde Fase 1); "Caja con GPS" es
+  un campo nuevo en `vehicles`. La columna "Lugar de detención" no la
+  pregunta el bot (Telegram solo da coordenadas, no nombres de lugar), así
+  que queda editable a mano desde esta página.
+  > No se incluye la columna `D('')` del encabezado original que
+  > compartió el cliente: su significado no quedó claro (parece un
+  > artefacto de Excel) y se dejó pendiente de confirmar.
+
+El bot de Telegram cambia el flujo de "🛑 Detención": ahora pide el
+**motivo** (texto libre) y si se **apagó el motor** (Sí/No, con botones)
+antes de registrar el evento — antes se registraba al toque sin pedir
+ninguno de los dos datos. `app.record_trip_event` gana un parámetro
+nuevo (`p_engine_off`); como cambia la firma, se hizo el mismo `drop
+function` explícito documentado en la Fase 9 (`create or replace` no
+hubiera reemplazado la función, habría creado un segundo overload).
+
+**Configuración**: correr la migración
+`20260919000600_protocol_fields.sql` y redesplegar el bot:
+
+```bash
+supabase functions deploy telegram-webhook --no-verify-jwt
+```
+
 ## Estructura del repositorio
 
 ```
@@ -422,5 +464,6 @@ src/
   dashboard.ts                  # torre de control en tiempo real + mapa en vivo (Fase 7)
   geofences.ts                  # Fase 4: importador + mapa de geocercas
   reportes.ts                   # Fase 10: KPIs históricos por operador/cliente/ruta
-index.html / login.html / dashboard.html / geofences.html / reportes.html
+  bitacora.ts                   # Fase 13: alta/edición de viajes + bitácora de detenciones
+index.html / login.html / dashboard.html / geofences.html / reportes.html / bitacora.html
 ```

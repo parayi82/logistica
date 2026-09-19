@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Torre de Control — Bitácora de protocolo</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <div class="topbar">
+      <h1>Torre de Control — Bitácora de protocolo</h1>
+      <div class="meta">
+        <a href="/dashboard.html" style="color: inherit">Viajes activos</a>
+        · <a href="/geofences.html" style="color: inherit">Geocercas</a>
+        · <a href="/reportes.html" style="color: inherit">Reportes</a>
+        · <span id="user-email"></span>
+        · <a href="#" id="logout-link" style="color: inherit">Salir</a>
+      </div>
+    </div>
+
+    <main>
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Viajes bajo protocolo</h2>
+        <button id="new-trip-btn" type="button" style="width: auto" hidden>+ Nuevo viaje</button>
+      </div>
+
+      <p id="trips-empty-state" class="empty-state" hidden></p>
+
+      <table style="margin-bottom: 28px">
+        <thead>
+          <tr>
+            <th>Folio</th>
+            <th>Cliente</th>
+            <th>Proveedor</th>
+            <th>Operador</th>
+            <th>Placa</th>
+            <th>Ruta</th>
+            <th>Estatus</th>
+            <th id="trips-edit-col-header" hidden>Editar</th>
+          </tr>
+        </thead>
+        <tbody id="trips-tbody">
+          <tr>
+            <td colspan="8" class="empty-state">Cargando…</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px">
+        <h2 style="font-size: 15px; margin: 0">Bitácora de detenciones</h2>
+        <button id="download-log-csv-btn" type="button" class="btn-secondary" style="width: auto">
+          Descargar CSV
+        </button>
+      </div>
+
+      <p id="log-empty-state" class="empty-state" hidden></p>
+
+      <div style="overflow-x: auto">
+        <table style="min-width: 1400px">
+          <thead>
+            <tr>
+              <th>BAJO PROTOCOLO</th>
+              <th>Folio</th>
+              <th>Cliente</th>
+              <th>Proveedor</th>
+              <th>Prv. Independiente</th>
+              <th>Operador</th>
+              <th>Modalidad</th>
+              <th>Placa</th>
+              <th>Caja con GPS</th>
+              <th>ECO</th>
+              <th>Doc. Transporte</th>
+              <th>Origen</th>
+              <th>Destino</th>
+              <th>Fecha</th>
+              <th>Encargado</th>
+              <th>Estatus</th>
+              <th>Modificado</th>
+              <th>Lugar de detención</th>
+              <th>Coordenadas</th>
+              <th>Motivo</th>
+              <th>Horario de reinicio</th>
+              <th>Paro de motor</th>
+            </tr>
+          </thead>
+          <tbody id="log-tbody">
+            <tr>
+              <td colspan="22" class="empty-state">Cargando…</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </main>
+
+    <div class="modal-overlay" id="trip-modal" hidden>
+      <div class="card modal" style="max-width: 560px">
+        <h2 id="trip-modal-title">Nuevo viaje</h2>
+        <div class="error" id="trip-modal-error"></div>
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px">
+          <div>
+            <label for="trip-folio">Folio</label>
+            <input id="trip-folio" type="text" placeholder="Opcional" />
+          </div>
+          <div>
+            <label for="trip-under-protocol" style="display: inline">Bajo protocolo</label>
+            <input id="trip-under-protocol" type="checkbox" style="width: auto; margin: 8px 0 0 8px" checked />
+          </div>
+
+          <div>
+            <label for="trip-client">Cliente</label>
+            <select id="trip-client"></select>
+          </div>
+          <div>
+            <label for="trip-shift">Turno</label>
+            <select id="trip-shift"></select>
+          </div>
+
+          <div>
+            <label for="trip-operator">Operador</label>
+            <select id="trip-operator"></select>
+          </div>
+          <div>
+            <label for="trip-vehicle">Unidad (placa)</label>
+            <select id="trip-vehicle"></select>
+          </div>
+
+          <div>
+            <label for="trip-provider">Proveedor</label>
+            <select id="trip-provider"></select>
+          </div>
+          <div>
+            <label for="trip-encargado">Encargado</label>
+            <select id="trip-encargado"></select>
+          </div>
+
+          <div>
+            <label for="trip-modality">Modalidad</label>
+            <input id="trip-modality" type="text" placeholder="Ej. Sencillo, Full…" />
+          </div>
+          <div>
+            <label for="trip-transport-doc">Doc. Transporte</label>
+            <input id="trip-transport-doc" type="text" placeholder="Opcional" />
+          </div>
+
+          <div>
+            <label for="trip-route-name">Ruta</label>
+            <input id="trip-route-name" type="text" />
+          </div>
+          <div>
+            <label for="trip-scheduled-departure">Fecha salida</label>
+            <input id="trip-scheduled-departure" type="datetime-local" />
+          </div>
+
+          <div>
+            <label for="trip-origin">Origen</label>
+            <input id="trip-origin" type="text" />
+          </div>
+          <div>
+            <label for="trip-destination">Destino</label>
+            <input id="trip-destination" type="text" />
+          </div>
+        </div>
+
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--panel-border)">
+          <label for="new-provider-name" style="display: inline">¿Proveedor nuevo? Escribe el nombre:</label>
+          <div style="display: flex; gap: 8px; align-items: center; margin-top: 6px">
+            <input id="new-provider-name" type="text" placeholder="Nombre del proveedor" style="margin-bottom: 0" />
+            <label for="new-provider-independent" style="display: inline; white-space: nowrap">Independiente</label>
+            <input id="new-provider-independent" type="checkbox" style="width: auto" />
+            <button id="add-provider-btn" type="button" class="btn-secondary" style="width: auto">Agregar</button>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" id="trip-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="trip-save">Guardar viaje</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="modal-overlay" id="stop-location-modal" hidden>
+      <div class="card modal">
+        <h2>Lugar de la detención</h2>
+        <div class="error" id="stop-location-error"></div>
+        <label for="stop-location-input">Nombre / referencia del lugar</label>
+        <textarea id="stop-location-input" rows="2" placeholder="Ej. Gasolinera Pemex km 45, autopista México-Puebla"></textarea>
+        <div class="modal-actions">
+          <button type="button" id="stop-location-cancel" class="btn-secondary">Cancelar</button>
+          <button type="button" id="stop-location-save">Guardar</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/bitacora.ts"></script>
+  </body>
+</html>

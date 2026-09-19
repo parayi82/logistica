@@ -48,9 +48,18 @@ export interface TripRow {
   current_status_since: string;
   scheduled_departure: string | null;
   scheduled_arrival: string | null;
+  under_protocol: boolean;
+  folio: string | null;
+  provider_id: string | null;
+  modality: string | null;
+  transport_doc: string | null;
+  encargado_id: string | null;
+  updated_at: string;
   clients?: { name: string } | null;
   operators?: { full_name: string; phone_e164: string } | null;
-  vehicles?: { plate: string } | null;
+  vehicles?: { plate: string; economic_number: string | null; box_has_gps: boolean } | null;
+  providers?: { name: string; is_independent: boolean } | null;
+  encargado?: { full_name: string } | null;
 }
 
 export interface TripEventRow {
@@ -61,6 +70,43 @@ export interface TripEventRow {
   geofence_validation_status: GeofenceValidationStatus;
   lat: number | null;
   lng: number | null;
+  notes?: string | null;
+  engine_off?: boolean | null;
+  stop_location_name?: string | null;
+}
+
+export interface ProviderRow {
+  id: string;
+  tenant_id: string;
+  name: string;
+  is_independent: boolean;
+  active: boolean;
+}
+
+export interface ProfileOption {
+  id: string;
+  full_name: string;
+  role: string;
+}
+
+// Una fila de la bitácora de detenciones (Fase 13): un evento DETENCION
+// con los datos del viaje ya resueltos (equivalente a una fila de la hoja
+// de cálculo de protocolo de seguridad que ya usa el cliente).
+export interface DetentionLogRow {
+  id: string;
+  trip_id: string;
+  reported_at: string;
+  notes: string | null;
+  engine_off: boolean | null;
+  stop_location_name: string | null;
+  lat: number | null;
+  lng: number | null;
+  trips?: {
+    folio: string | null;
+    route_name: string;
+    status: TripStatus;
+  } | null;
+  reinicio_at?: string | null;
 }
 
 export interface TripDelayRow {

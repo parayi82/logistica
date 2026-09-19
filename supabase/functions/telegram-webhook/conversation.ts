@@ -5,6 +5,7 @@ import {
   downloadTelegramFile,
   requestLocation,
   requestPhoneNumber,
+  sendInlineButtons,
   sendMainMenu,
   sendText,
 } from "../_shared/telegramApi.ts";
@@ -89,6 +90,18 @@ async function handleUpdate(db: Db, update: TelegramUpdate): Promise<void> {
       return;
     case "ESPERANDO_POD_NOMBRE":
       await handlePodNameStep(db, message, contact, state.context as { tripId?: string; eventId?: string }, chatId);
+      return;
+    case "ESPERANDO_DETENCION_MOTIVO":
+      await handleDetencionMotivoStep(db, message, contact, state.context as { tripId?: string }, chatId);
+      return;
+    case "ESPERANDO_DETENCION_MOTOR":
+      await handleDetencionMotorStep(
+        db,
+        callback,
+        contact,
+        state.context as { tripId?: string; motivo?: string },
+        chatId
+      );
       return;
     default:
       await handleMenuStep(db, message, callback, contact, activeTrip, chatId);
@@ -275,7 +288,6 @@ async function handleMenuSelection(
 ): Promise<void> {
   switch (selection) {
     case "EN_TRANSITO":
-    case "DETENCION":
     case "REINICIO": {
       const { error } = await db.rpc("record_trip_event", {
         p_trip_id: activeTrip.id,
@@ -288,6 +300,13 @@ async function handleMenuSelection(
       await sendText(chatId, `✅ Registrado: ${selection.replace("_", " ")} — ${new Date().toLocaleString("es-MX")}`);
       return;
     }
+    case "DETENCION":
+      // A diferencia de EN_TRANSITO/REINICIO, una detención necesita motivo
+      // y saber si se apagó el motor (columnas MOTIVO / PARO DE MOTOR de la
+      // bitácora de protocolo) antes de registrar el evento.
+      await setConversationStep(db, contact.id, "ESPERANDO_DETENCION_MOTIVO", { tripId: activeTrip.id });
+      await sendText(chatId, "¿Cuál es el motivo de la detención? Escríbelo:");
+      return;
     case "EVIDENCIA":
       await setConversationStep(db, contact.id, "ESPERANDO_FOTO", { tripId: activeTrip.id });
       await sendText(chatId, "Envía la foto de evidencia ahora 📷");
@@ -489,5 +508,75 @@ async function handleLocationStep(
     chatId,
     `✅ Ubicación recibida (${message.location.latitude.toFixed(5)}, ${message.location.longitude.toFixed(5)}). ` +
       "La validación contra el parador autorizado ya se aplicó automáticamente."
+  );
+}
+
+// ---------------------------------------------------------------------
+// Detención (Fase 13, bitácora de protocolo): a diferencia de EN_TRANSITO/
+// REINICIO, que se registran al toque, DETENCION pide primero el motivo
+// (texto libre) y luego si se apagó el motor (Sí/No), y solo entonces
+// registra el evento con ambos datos.
+// ---------------------------------------------------------------------
+async function handleDetencionMotivoStep(
+  db: Db,
+  message: TelegramMessage | undefined,
+  contact: TelegramContactRow,
+  context: { tripId?: string },
+  chatId: number
+): Promise<void> {
+  const motivo = message?.text?.trim();
+  if (!motivo) {
+    await sendText(chatId, "Escribe el motivo de la detención para continuar.");
+    return;
+  }
+  if (!context.tripId) {
+    await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
+    await sendText(chatId, "No encontré el viaje asociado a esta detención, intenta de nuevo desde el menú.");
+    return;
+  }
+
+  await setConversationStep(db, contact.id, "ESPERANDO_DETENCION_MOTOR", { tripId: context.tripId, motivo });
+  await sendInlineButtons(chatId, "¿Apagaste el motor durante esta detención?", [
+    { text: "✅ Sí", callback_data: "MOTOR_SI" },
+    { text: "❌ No", callback_data: "MOTOR_NO" },
+  ]);
+}
+
+async function handleDetencionMotorStep(
+  db: Db,
+  callback: TelegramUpdate["callback_query"],
+  contact: TelegramContactRow,
+  context: { tripId?: string; motivo?: string },
+  chatId: number
+): Promise<void> {
+  if (!callback?.data) {
+    await sendText(chatId, "Toca uno de los botones (Sí/No) para continuar.");
+    return;
+  }
+  await answerCallbackQuery(callback.id);
+
+  if (!context.tripId) {
+    await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
+    await sendText(chatId, "No encontré el viaje asociado a esta detención, intenta de nuevo desde el menú.");
+    return;
+  }
+
+  const engineOff = callback.data === "MOTOR_SI";
+  const { error } = await db.rpc("record_trip_event", {
+    p_trip_id: context.tripId,
+    p_event_type: "DETENCION",
+    p_operator_id: contact.operator_id,
+    p_reported_via: "telegram",
+    p_notes: context.motivo ?? null,
+    p_engine_off: engineOff,
+    p_raw_payload: callback,
+  });
+  if (error) throw error;
+
+  await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
+  await sendText(
+    chatId,
+    `✅ Registrado: DETENCION — ${new Date().toLocaleString("es-MX")}\n` +
+      `Motivo: ${context.motivo}\nMotor apagado: ${engineOff ? "Sí" : "No"}`
   );
 }
