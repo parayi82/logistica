@@ -84,6 +84,12 @@ async function handleUpdate(db: Db, update: TelegramUpdate): Promise<void> {
     case "ESPERANDO_UBICACION":
       await handleLocationStep(db, message, contact, state.context as { tripId?: string }, chatId);
       return;
+    case "ESPERANDO_POD_FOTO":
+      await handlePodPhotoStep(db, message, contact, state.context as { tripId?: string }, chatId);
+      return;
+    case "ESPERANDO_POD_NOMBRE":
+      await handlePodNameStep(db, message, contact, state.context as { tripId?: string; eventId?: string }, chatId);
+      return;
     default:
       await handleMenuStep(db, message, callback, contact, activeTrip, chatId);
   }
@@ -290,6 +296,10 @@ async function handleMenuSelection(
       await setConversationStep(db, contact.id, "ESPERANDO_UBICACION", { tripId: activeTrip.id });
       await requestLocation(chatId, "Comparte tu ubicación actual 📍");
       return;
+    case "ENTREGA":
+      await setConversationStep(db, contact.id, "ESPERANDO_POD_FOTO", { tripId: activeTrip.id });
+      await sendText(chatId, "Envía una foto de la entrega (paquete/firma de recibido) 📷");
+      return;
     default:
       await sendText(chatId, "No reconocí esa opción, escribe cualquier mensaje para ver el menú de nuevo.");
   }
@@ -349,6 +359,101 @@ async function handleEvidenceStep(
 
   await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
   await sendText(chatId, "✅ Evidencia recibida, gracias.");
+}
+
+// ---------------------------------------------------------------------
+// Prueba de entrega (POD, Fase 12): foto + nombre de quien recibió. A
+// diferencia de EVIDENCIA, el evento ENTREGA sí cambia el estatus del
+// viaje a FINALIZADO (ver app.record_trip_event) — por eso se registra
+// el evento apenas llega la foto (para no depender de un segundo mensaje
+// que el operador podría no mandar nunca), y el nombre se agrega después
+// actualizando ese mismo evento.
+// ---------------------------------------------------------------------
+async function handlePodPhotoStep(
+  db: Db,
+  message: TelegramMessage | undefined,
+  contact: TelegramContactRow,
+  context: { tripId?: string },
+  chatId: number
+): Promise<void> {
+  const photo = message?.photo?.at(-1);
+  if (!photo) {
+    await sendText(chatId, "Por favor envía una foto de la entrega para continuar 📷");
+    return;
+  }
+  if (!context.tripId) {
+    await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
+    await sendText(chatId, "No encontré el viaje asociado a esta entrega, intenta de nuevo desde el menú.");
+    return;
+  }
+
+  const { bytes, mimeType } = await downloadTelegramFile(photo.file_id);
+  const extension = mimeType.includes("png") ? "png" : "jpg";
+
+  const { data: trip, error: tripError } = await db
+    .from("trips")
+    .select("tenant_id")
+    .eq("id", context.tripId)
+    .single();
+  if (tripError) throw tripError;
+
+  const storagePath = `${trip.tenant_id}/${context.tripId}/pod-${Date.now()}.${extension}`;
+  const { error: uploadError } = await db.storage
+    .from("trip-evidence")
+    .upload(storagePath, bytes, { contentType: mimeType, upsert: false });
+  if (uploadError) throw uploadError;
+
+  const { data: event, error: eventError } = await db.rpc("record_trip_event", {
+    p_trip_id: context.tripId,
+    p_event_type: "ENTREGA",
+    p_operator_id: contact.operator_id,
+    p_reported_via: "telegram",
+    p_raw_payload: message,
+  });
+  if (eventError) throw eventError;
+
+  const { error: evidenceError } = await db.from("trip_evidence").insert({
+    tenant_id: trip.tenant_id,
+    trip_id: context.tripId,
+    trip_event_id: (event as { id: string }).id,
+    evidence_type: "POD",
+    storage_path: storagePath,
+  });
+  if (evidenceError) throw evidenceError;
+
+  await setConversationStep(db, contact.id, "ESPERANDO_POD_NOMBRE", {
+    tripId: context.tripId,
+    eventId: (event as { id: string }).id,
+  });
+  await sendText(chatId, "📷 Foto recibida. ¿Nombre de quién recibió la entrega?");
+}
+
+async function handlePodNameStep(
+  db: Db,
+  message: TelegramMessage | undefined,
+  contact: TelegramContactRow,
+  context: { tripId?: string; eventId?: string },
+  chatId: number
+): Promise<void> {
+  const receivedBy = message?.text?.trim();
+  if (!receivedBy) {
+    await sendText(chatId, "Escribe el nombre de quién recibió la entrega para continuar.");
+    return;
+  }
+  if (!context.eventId) {
+    await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
+    await sendText(chatId, "No encontré el evento de entrega asociado, intenta de nuevo desde el menú.");
+    return;
+  }
+
+  const { error } = await db
+    .from("trip_events")
+    .update({ notes: `Recibido por: ${receivedBy}` })
+    .eq("id", context.eventId);
+  if (error) throw error;
+
+  await setConversationStep(db, contact.id, "MENU_PRINCIPAL");
+  await sendText(chatId, `✅ Entrega registrada — recibida por ${receivedBy}. Viaje finalizado.`);
 }
 
 async function handleLocationStep(

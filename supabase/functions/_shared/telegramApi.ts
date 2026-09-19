@@ -28,7 +28,7 @@ export function sendText(chatId: number, text: string): Promise<unknown> {
 /**
  * Menú principal con lista de botones inline (equivalente al mensaje de
  * lista interactiva de WhatsApp): En tránsito / Detención / Reinicio /
- * Enviar evidencia / Compartir ubicación.
+ * Enviar evidencia / Compartir ubicación / Entrega (Fase 12, POD).
  */
 export function sendMainMenu(chatId: number, bodyText: string): Promise<unknown> {
   return callApi("sendMessage", {
@@ -41,6 +41,7 @@ export function sendMainMenu(chatId: number, bodyText: string): Promise<unknown>
         [{ text: "▶️ Reinicio", callback_data: "REINICIO" }],
         [{ text: "📷 Enviar evidencia", callback_data: "EVIDENCIA" }],
         [{ text: "📍 Compartir ubicación", callback_data: "UBICACION" }],
+        [{ text: "🏁 Entrega / Finalizar viaje", callback_data: "ENTREGA" }],
       ],
     },
   });

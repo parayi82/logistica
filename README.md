@@ -384,6 +384,28 @@ Edge Function), con BOM UTF-8 para que Excel no rompa acentos/ñ.
 
 **Configuración**: ninguna nueva.
 
+### ✅ Fase 12 — Prueba de entrega (POD)
+
+Nuevo botón en el menú del bot: "🏁 Entrega / Finalizar viaje"
+(`callback_data: ENTREGA`). A diferencia de "Enviar evidencia" (que no
+cambia el estatus del viaje), este SÍ lo hace: `app.record_trip_event`
+mapea el nuevo `event_type` `ENTREGA` a estatus `FINALIZADO` (mismo
+mecanismo que `DETENCION`→`DETENIDO`, `REINICIO`→`EN_TRANSITO`). Flujo de
+2 pasos: primero pide una foto (se sube a `trip-evidence` con el nuevo
+`evidence_type` `POD`, para distinguirla de evidencia genérica en
+reportes futuros) y registra el evento — así el viaje queda finalizado
+aunque el operador no complete el segundo paso —, luego pide el nombre de
+quién recibió la carga y lo guarda en `trip_events.notes` (columna que ya
+existía, sin campo nuevo). Un viaje `FINALIZADO` deja de aparecer como
+"viaje activo" en el menú del bot y en el dashboard.
+
+**Configuración**: ninguna nueva — reutiliza `TELEGRAM_BOT_TOKEN` y el
+bucket `trip-evidence` ya existentes. Solo hace falta el redeploy:
+
+```bash
+supabase functions deploy telegram-webhook --no-verify-jwt
+```
+
 ## Estructura del repositorio
 
 ```
